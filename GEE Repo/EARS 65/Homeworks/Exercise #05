@@ -1,0 +1,87 @@
+//bring in basin map, chirps data, and precip data
+var allBasins = ee.FeatureCollection("users/parkerdjones24/Hydroshed_L3_NA")
+var chirpsData = ee.ImageCollection("UCSB-CHG/CHIRPS/PENTAD")
+var era5Data = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY");
+
+//define total precipitation variable
+var era5Precip = era5Data.select('total_precipitation');
+
+var chirpPrecip = chirpsData.select('precipitation');
+//filter to NE watershed
+var neWaterShed = allBasins.filter(ee.Filter.eq('HYBAS_ID', 7030038340))
+
+Map.addLayer(neWaterShed)
+Map.centerObject(neWaterShed, 5)
+
+//create list of years for ERA5 data
+var years = ee.List.sequence(1981, 2020);
+
+// Function to calculate average annual pcpt in state
+var yearlyAvePcpt = function(year) {
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year')
+var erafilteredPcpt = era5Precip.filter(ee.Filter.date(startDate, endDate));
+var eraavePcpt = erafilteredPcpt.reduce(ee.Reducer.mean());
+var erastateAvePcpt = eraavePcpt.reduceRegion(ee.Reducer.mean(), neWaterShed, 1000);
+var eradailyPcpt = ee.Number(erastateAvePcpt.get('total_precipitation_mean'))
+var eraannualPcpt = eradailyPcpt.multiply(365)
+var chirpsfilteredPcpt = chirpPrecip.filter(ee.Filter.date(startDate, endDate));
+var chirpsavePcpt = chirpsfilteredPcpt.reduce(ee.Reducer.mean());
+var chirpsstateAvePcpt = chirpsavePcpt.reduceRegion(ee.Reducer.mean(), neWaterShed, 1000);
+var chirpsdailyPcpt = ee.Number(chirpsstateAvePcpt.get('precipitation_mean'))
+var chirpsannualPcpt = chirpsdailyPcpt.multiply(73)
+chirpsannualPcpt = chirpsannualPcpt.divide(1000);
+var featureToReturn = ee.Feature(null, {
+'year': year,
+'eraPrecip': eraannualPcpt,
+'chirpsPrecip': chirpsannualPcpt
+});
+return featureToReturn;
+};
+
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var precipRecord =
+ ee.FeatureCollection(years.map(yearlyAvePcpt));
+print(precipRecord)
+
+// Define the chart and print it to the console.
+var chart =
+    ui.Chart.feature
+        .byFeature({
+          features: precipRecord,
+          xProperty: 'year',
+          yProperties: ['eraPrecip', 'chirpsPrecip']
+        })
+        .setSeriesNames(['eraPrecipitation', 'chirpsPrecipitation'])
+        .setChartType('ScatterChart')
+        .setOptions({
+          title: 'Annual Precipitation in North Atlantic Watershed',
+          hAxis:
+              {title: 'Year', titleTextStyle: {italic: false, bold: true}},
+          vAxis: {
+            title: 'Precipitation (M)',
+            titleTextStyle: {italic: false, bold: true}
+          },
+          series: { 
+            0: {lineWidth: 3, color: 'steelblue', pointSize: 7}, 
+            1: {lineWidth: 3, color: 'orange', pointSize: 7} 
+          },
+          trendlines: { 0: {showR2: true, visibleInLegend: true},  
+                        1: {showR2: true, visibleInLegend: true} 
+          }
+        });
+print(chart);
+
+
+
+
+
+
+
+
+
+
+

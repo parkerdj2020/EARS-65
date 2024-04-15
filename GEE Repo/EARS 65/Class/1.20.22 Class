@@ -1,0 +1,145 @@
+//Load the ERA5-Land Monthly Averaged dataset
+var eraDataset = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY");
+
+//Select the surface air temp band
+var surfaceTemp = eraDataset.select('temperature_2m');
+
+// Load country features from Large Scale International Boundary (LSIB) dataset.
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States")
+
+// ee.Filter.metadata() depracated, suggest use ee.Filter.eq() instead
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+
+// Center map on selected state
+Map.centerObject(selectedState, 5);
+
+// Define visParams dictionary and display for selected state
+var shown = true; // true or false
+var opacity = 0.5; // number [0-1]
+var stateVis = {color: 'red'}; 
+
+// Add the selected state to the map display
+Map.addLayer(selectedState, stateVis, 'NH', shown, opacity);
+
+
+//*****************************************************************
+// Function to calculate average winter and summer temperature in 
+// selected state for given year
+//**************************************************************
+var yearlyAveTemp = function(year) {
+  
+  // Filter image collection for WINTER of single year
+  //---------------------------------------------------
+	var startDate = ee.Date.fromYMD(year, 1, 1).advance(-1, 'month');
+	var endDate = startDate.advance(3, 'month')
+	var filteredTemp = 
+     surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+
+  // Reduce image collection to single image with mean temp
+	var aveTemp = filteredTemp.reduce(ee.Reducer.mean());
+	
+  // Convert to degC
+	aveTemp = aveTemp.subtract(273.15);
+
+  //Define reduce region parameters
+  var reduceRegionParams = {
+    reducer: ee.Reducer.mean(),
+    geometry: selectedState.geometry(),
+    scale: 100,
+  }
+
+  // reduce region to get mean
+	var stateAveTemp  =   
+     aveTemp.reduceRegion(reduceRegionParams);
+     
+  // save ave winter temp
+  var winterTemp = stateAveTemp.get('temperature_2m_mean');
+  
+  
+  // Re-filter image collection for SUMMER of single year
+  //---------------------------------------------------
+	startDate = ee.Date.fromYMD(year, 7, 1).advance(-1, 'month');
+	endDate = startDate.advance(3, 'month')
+	filteredTemp = 
+     surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+
+  // Reduce image collection to single image with mean temp
+	aveTemp = filteredTemp.reduce(ee.Reducer.mean());
+	
+  // Convert to degC
+	aveTemp = aveTemp.subtract(273.15);
+
+  // reduce region to get mean
+	stateAveTemp  =   
+     aveTemp.reduceRegion(reduceRegionParams);
+     
+  // save ave summer temp
+  var summerTemp = stateAveTemp.get('temperature_2m_mean');
+  
+  
+// Create feature to return
+  var featureToReturn = ee.Feature(null, {
+    'year': year,
+    'winterAveTemp': winterTemp,
+    'summerAveTemp': summerTemp
+    });
+  return featureToReturn;
+  };
+//*********************************************************
+
+print(yearlyAveTemp(2017));
+
+
+// Use ee.List.sequence() to create list of years for which 
+// there are ERA5 data (1981 - 2021)
+var years = ee.List.sequence(1981, 2021);
+
+// Map the yearlyAveTemp function to each element in the list and
+// organize the returned ee.Features (from the function) 
+// into a Feature Collection 
+var stateTempRecord = ee.FeatureCollection(years.map(yearlyAveTemp));
+
+//print(stateTempRecord);
+  
+// Use the example code at 
+//  https://developers.google.com/earth-engine/guides/charts_feature#scatter_chart
+// To create scatter plot of year (x-axis) versus winter and summer average temps
+
+// Define the chart and print it to the console.
+var chart =
+    ui.Chart.feature
+        .byFeature({
+          features: stateTempRecord,
+          xProperty: 'year',
+          yProperties: ['winterAveTemp', 'summerAveTemp']
+        })
+        .setSeriesNames(['Winter', 'Summer'])
+        .setChartType('ScatterChart')
+        .setOptions({
+          title: 'Average Winter and Summer Temp',
+          hAxis:
+              {title: 'Years', titleTextStyle: {italic: true, bold: true}},
+          vAxis: {
+            title: 'Temperature (°C)',
+            titleTextStyle: {italic: true, bold: true}
+          },
+          series: {
+            0: {lineWidth: 3, color: 'steelblue', pointSize: 1},
+            1: {lineWidth: 3, color: 'tomato', pointsize: 1}
+          },
+          trendlines: { 0: {showR2: true, visibleInLegend: true},
+                        1: {showR2: true, visibleInLegend: true},
+          },
+        });
+print(chart);
+
+
+
+// Print chart to Console
+//print(chart);
+
+
+
+
+// Export temp record to Google Drive
+//** Export.table.toDrive({

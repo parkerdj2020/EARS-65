@@ -1,0 +1,141 @@
+//bring in ERA5 data set
+var eraDataset = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY");
+
+//select temperature_2m and precipitaion bands and save
+var surfaceTemp = eraDataset.select('temperature_2m');
+var totalPrecip = eraDataset.select('total_precipitation');
+
+//bring in states data set
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States");
+
+//filter stateBoundaries for particular USPS state abv.
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'MT'));
+
+//center map over state
+Map.centerObject(selectedState);
+
+//visParam for state
+var shown = true;
+var opacity = 0.5;
+var stateVis = {color: 'red'};
+
+//add border
+Map.addLayer(selectedState, stateVis, 'MT', shown, opacity);
+
+//define data for precip data
+var year = 2017
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year');
+
+//define filtered temp
+var filteredTemp = surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+
+var aveTempImage = filteredTemp.reduce(ee.Reducer.mean());
+//convert to C
+aveTempImage = aveTempImage.subtract(273.15);
+
+//vis params for avetempImage
+var aveTempVis = {
+  min: 0,
+  max: 25
+}
+
+//add layer to map
+Map.addLayer(aveTempImage, aveTempVis, 'AveTemp', true, 0.8);
+
+
+//Define reduce region parameters to get mean in selectedState
+var reduceRegionParams = {
+  reducer: ee.Reducer.mean(),
+  geometry: selectedState.geometry(),
+  scale: 250
+}
+
+//state ave temp
+var stateAveTemp = aveTempImage.reduceRegion(reduceRegionParams)
+
+//print state ave temp to console
+print('MT Average Temp: ', stateAveTemp.get('temperature_2m_mean'));
+
+//function to calculate average annual temp in state
+var yearlyAveTemp = function(year) {
+  var startDate = ee.Date.fromYMD(year, 1, 1)
+  var endDate = startDate.advance(1, 'year')
+  var filteredTemp =
+    surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+  var aveTemp = filteredTemp.reduce(ee.Reducer.mean());
+  aveTemp = aveTemp.subtract(273.15);
+  var stateAveTemp = 
+    aveTemp.reduceRegion(ee.Reducer.mean(), selectedState, 1000);
+  var featureToReturn = ee.Feature(null, {
+    'year': year,
+    'aveTemp': stateAveTemp.get('temperature_2m_mean')
+  });
+  return featureToReturn
+}
+
+//print function
+//print(yearlyAveTemp(2018));
+
+
+//print ave state temp in any year
+print('Average State Temp (C): ', yearlyAveTemp(2012));
+
+//create list of years for ERA5 data
+var years = ee.List.sequence(1981, 2020);
+
+//map yearlyAveTemp function to each element in list and organize the returned ee.Features
+// (from the function) into a FeatureCollection
+var stateTempRecord =
+  ee.FeatureCollection(years.map(yearlyAveTemp));
+  
+print(stateTempRecord)
+
+//export to drive
+Export.table.toDrive({
+  collection: stateTempRecord,
+  folder: 'earthengine/exercise4',
+  fileNamePrefix: 'NhTemperatureTable',
+  fileFormat: 'CSV'
+});
+
+// same thing, but for pcpt
+// Function to calculate average annual pcpt in state
+var yearlyAvePcpt = function(year) {
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year')
+var filteredPcpt = totalPrecip.filter(ee.Filter.date(startDate, endDate));
+var avePcpt = filteredPcpt.reduce(ee.Reducer.mean());
+var stateAvePcpt = avePcpt.reduceRegion(ee.Reducer.mean(), selectedState, 1000);
+var dailyPcpt = ee.Number(stateAvePcpt.get('total_precipitation_mean'))
+var annualPcpt = dailyPcpt.multiply(365)
+var featureToReturn = ee.Feature(null, {
+'year': year,
+'avePcpt': annualPcpt
+});
+return featureToReturn;
+};
+
+// code to print ave state temperature in any year
+print('Average state Precipitation: ', yearlyAvePcpt(2017));
+
+// Create list of years for which there are ERA5 data
+var years = ee.List.sequence(1981, 2020);
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var statePcptRecord =
+ ee.FeatureCollection(years.map(yearlyAvePcpt));
+print(statePcptRecord)
+
+// export the data (from assignment)
+Export.table.toDrive({
+ collection: statePcptRecord,
+ folder: 'earthengine/exercise4',
+ fileNamePrefix: 'NMPcptTable',
+ fileFormat: 'CSV'});
+
+
+
+

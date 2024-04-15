@@ -1,0 +1,294 @@
+//-------------------------------------------------------
+// Load the datasets, geometries, and visual parameter dictionaries   
+//-------------------------------------------------------
+
+// Load Landsat 8 Level 2, Collection 2, Tier 1 dataset for
+// atmospherically corrected surface reflectance
+var landsat = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2");
+
+// Define the band names to change them to standard names
+var landsatBandNames = ['SR_B1','SR_B2','SR_B3','SR_B4','SR_B5','SR_B6', 'SR_B7'];
+var standardBandNames = ['ultrablue','blue','green', 'red', 'nir','swir1','swir2'];
+
+
+// Locate Santa Rosa, Peru
+var miningCenter = ee.Geometry.Point([-69.96, -12.94]);
+
+//  Cuprite, NV
+//var miningCenter = ee.Geometry.Point([-117.17, 37.54]); 
+   
+
+// Santa Rosa mining area AOI       
+var miningAOI = 
+    ee.Geometry.Polygon(
+        [[[-70.69, -12.61],
+          [-70.69, -13.15],
+          [-69.79, -13.15],
+          [-69.79, -12.611]]], null, false); 
+
+          
+
+// Cuprite area AOI       
+var miningAOI =  
+    ee.Geometry.Polygon(
+        [[[-117.23, 37.63],
+          [-117.23, 37.47],
+          [-116.97, 37.47],
+          [-116.97, 37.63]]], null, false); 
+
+
+
+
+
+//------------------------------------------------------
+// visParams Dictionaries
+//------------------------------------------------------
+
+// True color visParams
+var landsatVis = {
+  min: 0,
+  max: 20000,
+  gamma: 0.5,
+  bands: ['red', 'green', 'blue']
+};
+
+
+//*********************************************************
+// Define the functions
+//*********************************************************
+
+
+//-------------------------------------------------------
+// Function to get cloud-free landsat composite for given year
+//-------------------------------------------------------
+var getCloudFreeImage = function(year) {
+  
+    // Define start and end dates for images
+  var startDate = ee.Date.fromYMD(year, 1, 1)
+  var endDate = ee.Date.fromYMD(year, 12, 31)
+
+  //Get the Landsat collection from given year for Santa Rosa, Peru
+  var imageCollection = landsat
+    .filterBounds(miningCenter)
+    .filterDate(startDate, endDate)
+    .sort('CLOUD_COVER')
+    .select(landsatBandNames,standardBandNames);
+    
+  // Get a cloud-free Landsat composite image
+  var image = imageCollection.first();
+  
+  // Reduce image noise by smoothing  
+  //var smoothing_radius = 200;
+  //image = image.focal_mean(smoothing_radius, 'circle', 'meters');
+  
+  // return the image
+  return image;
+}
+//-------------------------------------------------------
+
+
+//-------------------------------------------------------
+// Function to calcuates PCA's of an image
+// Number of PCs calculated equals number of bands in image
+// Based on code at:
+// https://developers.google.com/earth-engine/guides/arrays_eigen_analysis
+// Before calling use must set var boundary = AOI
+//-------------------------------------------------------
+function getPCA(maskedImage){
+  var image = maskedImage.unmask()
+  var scale = 30;
+  var region = boundary;
+  var bandNames = image.bandNames();
+  // Mean center the data to enable a faster covariance reducer
+  // and an SD stretch of the principal components.
+  var meanDict = image.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: region,
+    scale: scale,
+    maxPixels: 1e9,
+    bestEffort: true,
+    tileScale: 16
+  });
+  var means = ee.Image.constant(meanDict.values(bandNames));
+  var centered = image.subtract(means);
+  // This helper function returns a list of new band names.
+  var getNewBandNames = function(prefix) {
+    var seq = ee.List.sequence(1, bandNames.length());
+    return seq.map(function(b) {
+      return ee.String(prefix).cat(ee.Number(b).int());
+    });
+  };
+  // This function accepts mean centered imagery, a scale and
+  // a region in which to perform the analysis.  It returns the
+  // Principal Components (PC) in the region as a new image.
+  var getPrincipalComponents = function(centered, scale, region) {
+    // Collapse the bands of the image into a 1D array per pixel.
+    var arrays = centered.toArray();
+    
+    // Compute the covariance of the bands within the region.
+    var covar = arrays.reduceRegion({
+      reducer: ee.Reducer.centeredCovariance(),
+      geometry: region,
+      scale: scale,
+      maxPixels: 1e9,
+      bestEffort: true,
+      tileScale: 16
+    });
+
+    // Get the 'array' covariance result and cast to an array.
+    // This represents the band-to-band covariance within the region.
+    var covarArray = ee.Array(covar.get('array'));
+
+    // Perform an eigen analysis and slice apart the values and vectors.
+    var eigens = covarArray.eigen();
+
+    // This is a P-length vector of Eigenvalues.
+    var eigenValues = eigens.slice(1, 0, 1);
+    
+    // Compute Percentage Variance of each component
+    var eigenValuesList = eigenValues.toList().flatten()
+    var total = eigenValuesList.reduce(ee.Reducer.sum())
+    var percentageVariance = eigenValuesList.map(function(item) {
+      return (ee.Number(item).divide(total)).multiply(100).format('%.2f')
+    })
+    // This will allow us to decide how many components capture
+    // most of the variance in the input
+    print('Percentage Variance of Each Component', percentageVariance)
+    // This is a PxP matrix with eigenvectors in rows.
+    var eigenVectors = eigens.slice(1, 1);
+    print ('PC Loadings', eigenVectors)
+    // Convert the array image to 2D arrays for matrix computations.
+    var arrayImage = arrays.toArray(1);
+
+    // Left multiply the image array by the matrix of eigenvectors.
+    var principalComponents = ee.Image(eigenVectors).matrixMultiply(arrayImage);
+
+    // Turn the square roots of the Eigenvalues into a P-band image.
+    var sdImage = ee.Image(eigenValues.sqrt())
+      .arrayProject([0]).arrayFlatten([getNewBandNames('sd')]);
+
+    // Turn the PCs into a P-band image, normalized by SD.
+    return principalComponents
+      // Throw out an an unneeded dimension, [[]] -> [].
+      .arrayProject([0])
+      // Make the one band array image a multi-band image, [] -> image.
+      .arrayFlatten([getNewBandNames('pc')])
+      // Normalize the PCs by their SDs.
+      .divide(sdImage);
+  };
+  var pcImage = getPrincipalComponents(centered, scale, region);
+  return pcImage.mask(maskedImage.mask());
+}
+
+
+
+
+
+
+//******************************************************
+// Center map and add true color image
+//******************************************************
+
+
+// Center map on selected basin
+Map.centerObject(miningCenter, 11);
+
+// Get cloud-free image for given year
+var year = 2020;
+var landsatImage = getCloudFreeImage(year);
+
+// Add true color median image to display
+Map.addLayer(landsatImage, landsatVis, 'True Color');
+
+
+
+//----------------------------------------------------
+// Cluster image using PCA
+//----------------------------------------------------
+
+// Define boundary for PCA analysis
+var boundary = miningAOI
+
+// Call the getPCA, keeping just first three bands
+var fullPCA = getPCA(landsatImage);
+
+// Call the getPCA, keeping just first three bands
+var firstThreePCA = fullPCA.select(['pc1', 'pc2', 'pc3'])
+
+//Display image using first three PCA bands
+Map.addLayer(firstThreePCA, {bands: ['pc3', 'pc1', 'pc2']}, 'PCA')
+//----------------------------------------------------
+
+
+
+
+
+//----------------------------------------------------
+// Cluster image using K means
+//----------------------------------------------------
+
+// Sample with image within AOI
+var sampleDataset = landsatImage.sample({ 
+  region: miningAOI,
+  scale: 30,
+  numPixels: 5000
+});
+
+// Set thenumber of clusters and create the K-means clusterer
+var numberOfClusters = 3
+var clusterer = ee.Clusterer.wekaKMeans(numberOfClusters).train(sampleDataset);
+
+// Use the clusterer to cluster the image
+var clusteredImage = landsatImage.cluster(clusterer);
+
+// Display the clusters with random colors.
+Map.addLayer(clusteredImage.randomVisualizer(), {}, 'Orig Image Clusters');
+//----------------------------------------------------
+ 
+
+
+/*
+//----------------------------------------------------
+// Apply K means clusterer to second image
+//----------------------------------------------------
+
+// Get cloud-free image for another year >= 2014
+year = 2014;
+var landsatImage2 = getCloudFreeImage(year);
+
+// Add true color  image to display
+Map.addLayer(landsatImage2, landsatVis, '2nd Image');
+
+
+// Use the clusterer to cluster the image
+var clusteredImage2 = landsatImage2.cluster(clusterer);
+
+// Display the clusters with random colors.
+Map.addLayer(clusteredImage2.randomVisualizer(), {}, '2nd Image Clusters');
+//----------------------------------------------------
+*/
+
+
+/*
+//----------------------------------------------------
+// Cluster image using PCA
+//----------------------------------------------------
+
+// Sample with image within AOI
+var sampleDataset = fullPCA.sample({ 
+  region: miningAOI,
+  scale: 30,
+  numPixels: 5000
+});
+
+
+// Create the K-means clusterer
+var clustererPCA = ee.Clusterer.wekaKMeans(numberOfClusters).train(sampleDataset);
+
+// Use the clusterer to cluster the image
+var clusteredPCAImage = fullPCA.cluster(clustererPCA);
+
+// Display the clusters with random colors.
+Map.addLayer(clusteredPCAImage.randomVisualizer(), {}, 'PCA Image Clusters');
+//----------------------------------------------------
+*/

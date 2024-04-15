@@ -1,0 +1,24 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var greenCoordinates = /* color: #d63000 */ee.Geometry.Point([-72.28864003985369, 43.70337069079617]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//create an image container with the SRTM data
+var srtmImage = ee.Image("CGIAR/SRTM90_V4");
+
+//Zoom to the imported location
+Map.centerObject(greenCoordinates, 3); // Center on Green
+
+//Get the hillshade image of srtm
+var hillShade = ee.Terrain.hillshade(srtmImage);
+
+// Display the result
+Map.addLayer(hillShade, {}, 'Hillshade');
+
+//visParams
+var srtmVis = {
+  min: 0,
+  max: 4000,
+  palette: ['blue', 'aqua', 'green', 'orange', 'red']
+};
+
+//Display the image on the Map
+Map.addLayer(srtmImage, srtmVis, 'SRTM Elevation');

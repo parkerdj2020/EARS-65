@@ -1,0 +1,37 @@
+// creating image collection for data
+var worldClimate = ee.ImageCollection("WORLDCLIM/V1/MONTHLY");
+
+//bring in 'tavg' band from WorldClimate Dataset
+var meanPrecipitation = worldClimate.select('prec');
+
+//get data for specific month, and make it first item under qualifications of "7"
+var julyPrecipitation = meanPrecipitation.filterMetadata('month', 'equals', 7)
+                              .first();
+//vis params for monthly average
+var meanPrecipitationVis = {
+  min:0,
+  max:500,
+  palette: ['red', 'yellow', 'green', 'cyan', 'blue']
+}
+
+//Calculate the yearly average temperature
+var meanYearlyPrecipitation = meanPrecipitation.reduce(ee.Reducer.mean());
+
+//Calculate July Anomoly
+var julyAnomoly = julyPrecipitation.subtract(meanYearlyPrecipitation);
+
+//Vis Params for anomoly temp image
+var anomolyPrecipitationVis = {
+  min:-180,
+  max: 1300,
+  palette: ['blue', 'red']
+}
+
+//make a map layer for anomoly temp
+Map.addLayer(julyAnomoly, anomolyPrecipitationVis, 'July Anomoly');
+
+//make a map layer for july temp
+Map.addLayer(julyPrecipitation, meanPrecipitationVis, 'July');
+
+//print temp averages
+print ('Precipitation Averages: ', julyPrecipitation);

@@ -1,0 +1,210 @@
+//bring in data
+var terraData = ee.ImageCollection("MODIS/006/MOD10A1")
+var completeSnowCover = terraData.select('NDSI_Snow_Cover')
+
+var modisData = ee.Image("MODIS/MOD44W/MOD44W_005_2000_02_24")
+var waterMask = modisData.select('water_mask')
+
+var allbasins = ee.FeatureCollection("WWF/HydroSHEDS/v1/Basins/hybas_1")
+Map.addLayer(allbasins);
+
+//filter basins
+var usBasin = allbasins.filter(ee.Filter.eq('HYBAS_ID', 7010000010));
+var canadaBasin = allbasins.filter(ee.Filter.eq('HYBAS_ID', 8010000010));
+
+var naBasin = usBasin.merge(canadaBasin);
+
+// create water only mask
+var waterOnly = waterMask.updateMask(waterMask);
+var waterOnlyVis = {
+  min: 0,
+  max: 1,
+ palette: 'blue',
+};
+Map.addLayer(waterOnly, waterOnlyVis, 'Water Only');
+
+//make land only mask
+var landMask = waterMask.not();
+var landOnly = landMask.updateMask(landMask);
+var landOnlyVis = {
+  min: 0,
+  max: 1,
+ palette: 'green',
+};
+Map.addLayer(landOnly, landOnlyVis, 'Land Only');
+
+//filter data to jan to feb of last year
+var startDate = ee.Date.fromYMD(2021,1,1)
+var endDate = ee.Date.fromYMD(2021,8,31)
+var yearSnowCover = completeSnowCover.filter(ee.Filter.date(startDate, endDate))
+
+
+//function to return masked images where images with snow value of greater than 10 have value 1
+var binarySnowFunction = function(snowCoverImage) {
+return snowCoverImage.gte(10);
+};
+//map over entire year
+var ephemeralSnowCoverCollection = yearSnowCover.map(binarySnowFunction);
+//map for only streaks of 14 days or greater
+var emphemeralSnowMask = ephemeralSnowCoverCollection.sum().gte(14);
+
+// mask out permanent snow by masking out snow that is there for more than half the year
+var nonIceMask = ephemeralSnowCoverCollection.sum().lte(180);
+
+// multiply landMask, emphemeralSnowMask, nonIceMask to make snowCoverMask
+// value of 1 for all snow that is snow value of more than 10, longer than 14 days,
+// and less than half the year 
+var snowCoverMask = landMask.multiply(emphemeralSnowMask)
+                        .multiply(nonIceMask);
+
+//Function to add date info to an image in snow cover collection
+var addDateBands= function(snowCoverImage) {
+ var imgDate = snowCoverImage.date() //get the date from the image
+ var imgYear = ee.Number.parse(imgDate.format('YYYY')); // parse the date, get year
+ var calDoy = imgDate.getRelative('day','year') // use getRelative method to get day-of-year
+ var millis = imgDate.millis() // image date in Unix time
+ // Add all the above as bands in new image.
+ var dateBands = ee.Image.constant([calDoy, millis, imgYear])
+ .rename(['calDoy', 'millis', 'year']);
+ // Cast bands to correct type while adding to snowCoverImage.
+ return snowCoverImage.addBands(dateBands)
+ .cast({'calDoy': 'int', 'millis': 'long','year': 'int'});
+}
+
+
+// Function to calculate first snow free day for each pixel
+// in given year
+function getSnowFreeDay(year) {
+ var startDate = ee.Date.fromYMD(year, 1, 1); //set the startDate as first day of year
+ var endDate = ee.Date.fromYMD(year, 8,31); //set the endDate as last day of August of year
+ 
+ // filter completeSnowCover for those images between dates
+ var filteredSnowCoverCollection = completeSnowCover.filterDate(startDate,endDate);
+ 
+ // add date bands by mapping function over each image
+ var dateSnowCoverCollection = filteredSnowCoverCollection.map(addDateBands);
+ 
+ //sort the collection by Unix time ‘millis’ (arrange chronologically)
+ var sortSnowCoverCollection = dateSnowCoverCollection.sort('millis');
+ //print('sort:', sortSnowColverCollection)
+ // make a mosaic composed of pixels from images that
+ // represent the minimum percent snow cover.
+ // Taking the min of an image collection retains first
+ // instance of the min value in the collection
+ // Include all bands for the selected pixel
+ var minSnowCover = sortSnowCoverCollection.reduce(ee.Reducer.min(4));// the '4' returns all 4 bands
+ // print('minSnowCover:', minSnowCover)
+ //creating the mosaic image deletes the band names (called min, min1, min2, min3)
+ 
+ // rename the bands appropriately
+ minSnowCover = minSnowCover.rename(['snowCover', 'calDoy', 'millis', 'year']);
+ 
+ // creating the mosaic image also deleted the image year
+ // reset the image year
+ minSnowCover = minSnowCover.set('year', year);
+ 
+ // apply snow cover mask to the collection
+ minSnowCover = minSnowCover.updateMask(snowCoverMask);
+ 
+ // only pay attention to those pixels that have snow that completely melts
+ // didn't snowCoverMask already do this???
+ var meltMask= minSnowCover.select('snowCover').eq(0);
+ 
+ // apply mask to collection
+ minSnowCover = minSnowCover.updateMask(meltMask);
+ 
+ // return image
+ return minSnowCover;
+}
+
+
+var modisYears = ee.List.sequence(2000, 2021);
+
+// Map the getSnowFreeDay function to each element in the list and
+// organize the returned ee.Images (from the function)
+// into a Image Collection
+var annualSnowMaps =
+ ee.ImageCollection(modisYears.map(getSnowFreeDay));
+print(annualSnowMaps);
+
+// Define visParams dictionary
+var snowFreeVis = {
+  max: 180,
+  min: 14,
+  palette: ['DarkBlue', 'DarkMagenta', 'DarkOrange', 'Yellow']
+};
+
+/*
+// cannot filter modis data, must use clip function
+// Function to clip image to North America
+function clipImage(image) {
+ return image.clip(naBasin);
+}
+// map over annualSnowMaps collection
+var annualSnowMapsClip = ee.ImageCollection(annualSnowMaps.map(clipImage));
+print(annualSnowMapsClip)
+*/
+
+// use below for entire globe:
+var annualSnowMapsClip = annualSnowMaps
+
+// extract the 2021 snow free image from the the annualSnowMaps image collection
+// Extract out snow free day image for 2021
+var lastYearSnowFreeDay =
+annualSnowMapsClip.filter(ee.Filter.eq('year', 2021)).first().select('calDoy');
+
+print(lastYearSnowFreeDay)
+ 
+ // display the 2021 image on the map
+Map.addLayer(lastYearSnowFreeDay, snowFreeVis, 'last year')
+
+
+
+
+
+// extract 2020 data, find difference btw 2020 and 2021, display
+// Define the years to difference.
+// Calculate difference image.
+var firstYearSnowFreeDay =
+annualSnowMapsClip.filter(ee.Filter.eq('year', 2000))
+ .first().select('calDoy');
+ print(firstYearSnowFreeDay)
+ 
+var difSnowDayImage = lastYearSnowFreeDay.subtract(firstYearSnowFreeDay);
+
+Map.addLayer(firstYearSnowFreeDay, snowFreeVis, 'first year')
+
+// Define visParams dictionary
+var snowDifVis = {
+  max: 60,
+  min: -60,
+  palette: ['DarkRed', 'White', 'DarkBlue']
+};
+
+// display difference image
+Map.addLayer(difSnowDayImage, snowDifVis, 'difference')
+
+// sort chronologically
+annualSnowMapsClip = annualSnowMapsClip.sort('millis')
+
+// calc slope of yearly data for each pixel (change in first snow free day over time)
+var linearFit = annualSnowMapsClip.select(['year', 'calDoy'])
+ .reduce(ee.Reducer.linearFit());
+ 
+var linearFitImage = linearFit.select('scale')
+
+// Define visParams dictionary
+var slopeVis = {
+  max: 2,
+  min: -2,
+  palette: ['DarkRed', 'White', 'DarkBlue']
+};
+
+// display difference image
+Map.addLayer(linearFitImage, slopeVis, 'slope')
+
+
+
+
+
+

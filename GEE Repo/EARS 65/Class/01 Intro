@@ -1,0 +1,88 @@
+
+// The canonical first program
+//print ('Hello, World');
+
+
+
+
+
+// ----------- Javascript Strings -----------------------
+// The double slash indicates this line is a comment
+// Use the keyword "var" to create a string variable 
+// with your name
+//var username = 'Parker';
+
+
+
+// Print the string variable "userName"
+//print (username);
+
+
+
+// You can combine strings using the "concatenate" operator "+" 
+//print('Hello, '+ username)
+
+
+
+// The userName is still "hard coded".  Want to personalize to
+// each user.  So instead ask for name using prompt() command
+
+// Create a variable with the name of the user
+//var userName = prompt('What is your name?')
+
+
+
+// Print the personalized greeting
+//print('Hello, ' + userName);
+
+
+
+// ----------- Javascript Numbers -----------------------
+// Create a variable with the user’s favorite number
+// Because there are not quotes, GEE will treat this as a number, not text
+//var userFavoriteNumber = 42;
+
+
+// Print the user’s favorite number
+//print('Your favorite number is ' + userFavoriteNumber);
+
+
+
+//As before, can prompt user the enter their favorite number
+// Create a variable with the user’s favorite number
+
+//var userFavoriteNumber = prompt('What is your favorite number?')
+
+// Print the user’s favorite number
+//print('Your favorite number is ' + userFavoriteNumber);
+
+
+// ----------- Javascript Lists -----------------------
+// Used to store a series of numbers or strings.
+// Can mix numbers and strings
+
+// Create a variable with list of strings
+//var fairchildAddress = [19, ' Fayerweather'];
+
+
+// Tell user where they are
+//print('You are at ' + fairchildAddress);
+
+
+
+
+// ----------- Javascript Dictionaries -----------------------
+// Special type of list where each item has a name or "key"
+// Use {} instead of []
+// Items can include lists
+var fairchildAddress = {
+  streetNumber: 19,
+  streetName: 'Fayerweather'
+}
+
+print('You are at ' + fairchildAddress.streetNumber + ' ' + fairchildAddress.streetName);
+
+
+// Can access each item in dictionary with key using dot notation
+//**
+

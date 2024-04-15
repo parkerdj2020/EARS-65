@@ -1,0 +1,41 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var Landsat8_SR = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// Earth Engine script "Toshka" by Jane Q Student
+
+// Display a point (lon 31.4, lat 22.9) and center the map on it
+var toshkaPoint = ee.Geometry.Point([31.4, 22.9]);
+Map.centerObject(toshkaPoint, 12);
+
+// Specify a time period to search
+var startDate = "2014-01-01";
+var endDate = "2014-03-01";
+
+// Select only the images covering the study site during the time window
+var L8images = ee.ImageCollection(Landsat8_SR)
+.filterDate(startDate,endDate)
+.filterBounds(toshkaPoint);
+
+// Print out the number of images found
+var count = L8images .size();
+print("Total number of Landsat images during the time window: ", count);
+
+// Sort the list of images by cloud cover, and get the first (i.e., least cloudy)
+var myImage = ee.Image(L8images .sort("CLOUD_COVER").first());
+
+// Print some info about the chosen image 
+var date = ee.Date(ee.Number(myImage.get('system:time_start')));
+var cloud = myImage.get("CLOUD_COVER");
+print("Image date: ", date, "Cloud cover: ", cloud, myImage);
+
+// Display the image on the map
+var BandsRGB = {
+	bands: ["SR_B5", "SR_B4", "SR_B3"],
+	min: 5000, max: 25000 };
+Map.addLayer(myImage, BandsRGB, "Landsat-8 image");
+
+// Calculate NDVI and add it to the map
+var NDVI = myImage.normalizedDifference(["SR_B5","SR_B4"]);
+Map.addLayer(NDVI, {min: 0, max: 0.5}, "NDVI");
+// Add the center-point of the study site to the map
+Map.addLayer(toshkaPoint, {color: 'FFFF00'},"Toshka");

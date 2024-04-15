@@ -1,0 +1,108 @@
+// Load Terra Surface Reflectance 8-Day Global 500m
+var modisSRDataset = ee.ImageCollection("MODIS/006/MOD09A1")
+
+
+//------------------------------------------------------
+// Utility code to change band names and extract parts of a bitmask
+//------------------------------------------------------
+
+// Band Names
+var modisBandNames = ['sur_refl_b03','sur_refl_b04','sur_refl_b01','sur_refl_b02','sur_refl_b06','sur_refl_b07'];
+var standardBandNames = ['blue','green','red','nir','swir1','swir2'];
+
+// Helper function to extract the bits in a bitmask for an image
+function getQABits(image, start, end, newName) {
+    // Compute the bits we need to extract.
+    var pattern = 0;
+    for (var i = start; i <= end; i++) {
+       pattern += Math.pow(2, i);
+    }
+    // Return a single band image of the extracted QA bits, giving the band
+    // a new name.
+    return image.select([0], [newName])
+                  .bitwiseAnd(pattern)
+                  .rightShift(start);
+}
+//------------------------------------------------------
+
+
+
+//------------------------------------------------------
+// Get and display true color image from late summer
+//------------------------------------------------------
+
+// Define end of summer dates
+var startDate = ee.Date.fromYMD(2010,8,1);
+var endDate = ee.Date.fromYMD(2010,8,31);
+
+// Get first image in date range 
+// Use .select() method to rename its bands using standard band names
+var firstImage = modisSRDataset.filterDate(startDate,endDate)
+                                .first()
+                                .select(modisBandNames,standardBandNames);
+
+// Define True Color visParams and display image
+var modisVis = {
+  min:0,
+  max:3000,
+  bands:['red','green','blue'],
+  gamma:1.3};
+  
+// Add firstImage to map
+Map.addLayer(firstImage,modisVis,"True Color")
+
+
+//------------------------------------------------------
+// Define visParams for 1,2, and 3 bit masks
+//------------------------------------------------------
+
+// 1-bit mask (2^1 = 2 possible values)
+var binaryVis = {
+  min: 0,
+  max: 1,
+  palette: ['white', 'red']
+}
+
+// 2-bit mask (2^2 = 4 possible values)
+var quadVis = {
+  min: 0,
+  max: 3,
+  palette: ['white', 'red', 'green', 'blue']
+}
+
+// 3-bit mask (2^3 = 8 possible values)
+var octVis = {
+  min: 0,
+  max: 7,
+  palette: ['white', 'red', 'yellow', 'black', 'orange', 'green', 'blue', 'brown']
+}
+//------------------------------------------------------
+
+
+//------------------------------------------------------
+// Extract and display the bitmasks
+//------------------------------------------------------
+
+/*Bits 0-1: Cloud state
+    0: Clear (white)
+    1: Cloudy (red)
+    2: Mixed (green)
+    3: Note set - assumed clear (blue)
+    */
+var cloudState =   getQABits(modisSRDataset.filterDate(startDate,endDate)
+                                            .first()
+                                            .select('StateQA'),0,1,'internal_quality_flag');
+Map.addLayer(cloudState, quadVis, 'CloudState');
+
+
+
+/*Bits 3-5: Land/water flag
+    0: Shallow ocean (white)
+    1: Land (red) 
+    2: Ocean coastlines and lake shorelines (yellow)
+    3: Shallow inland water (black)
+    4: Ephemeral water (orange)
+    5: Deep inland water (green)
+    6: Continental/moderate ocean (blue)
+    7: Deep ocean (brown)
+*/

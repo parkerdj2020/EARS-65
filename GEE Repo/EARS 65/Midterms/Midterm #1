@@ -1,0 +1,215 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var hanover = /* color: #d63000 */ee.Geometry.Point([-72.29056358665636, 43.70250291648372]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//bring in Prism data and Terra Net Evapotranspiration data
+var prismData = ee.ImageCollection("OREGONSTATE/PRISM/AN81m")
+var terranetData = ee.ImageCollection("MODIS/006/MOD16A2")
+
+//bring in elevation collection
+var srtmImage = ee.Image("CGIAR/SRTM90_V4")
+
+//bring in annual Prism Precipitation
+var prismPrecip = prismData.select('ppt')
+//bring in annual Modis ET
+var modisET = terranetData.select('ET')
+/*
+//create a variable for hillshade off of elevation
+var hillShade = ee.Terrain.hillshade(srtmImage);
+//add hillshade to map
+Map.addLayer(hillShade, {}, 'Hillshade');
+
+//center map over Hanover
+Map.centerObject(hanover, 8.5)
+
+
+//define year for precip and ET data
+var year = 2014
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year');
+
+//filter prism precip to correct dates
+var filteredPrismPrecip = prismPrecip.filter(ee.Filter.date(startDate, endDate));
+//average the precip from months
+var annualPrismPrecip = filteredPrismPrecip.reduce(ee.Reducer.mean());
+
+
+//vis params for prism Precip
+var prismPrecipVis = {
+  min: 80,
+  max: 160,
+  palette: ['red', 'orange', 'green', 'aqua', 'blue']
+}
+
+//add prism precip layer to map
+Map.addLayer(annualPrismPrecip, prismPrecipVis, 'PrismPrecip', false, .3);
+
+//filter modis ET to correct dates
+var filteredmodisET = modisET.filter(ee.Filter.date(startDate, endDate));
+//average the precip from months
+var annualmodisET = filteredmodisET.reduce(ee.Reducer.mean());
+
+
+//vis params for prism Precip
+var modisETVis = {
+  min: 120,
+  max: 175,
+  palette: ['red', 'orange', 'green', 'aqua', 'blue']
+}
+
+//add prism precip layer to map
+Map.addLayer(annualmodisET, modisETVis, 'modisET', true, .3);
+
+*/
+
+//define location to New Hampshire
+//bring in states data set
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States");
+
+//filter stateBoundaries for particular USPS state abv.
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+
+//create list of years for ERA5 data
+var years = ee.List.sequence(2001, 2020);
+
+// Function to calculate average annual pcpt in state
+var yearlyPrecipChange = function(year) {
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year')
+
+var prismfilteredPcpt = prismPrecip.filter(ee.Filter.date(startDate, endDate));
+var prismavePcpt = prismfilteredPcpt.reduce(ee.Reducer.mean());
+var prismstateAvePcpt = prismavePcpt.reduceRegion(ee.Reducer.mean(), selectedState, 100);
+var prismMonthlyPcpt = ee.Number(prismstateAvePcpt.get('ppt_mean'))
+var prismAnnualPcpt = prismMonthlyPcpt.multiply(12)
+prismAnnualPcpt = prismAnnualPcpt.divide(1000)
+
+var modisFilteredET = modisET.filter(ee.Filter.date(startDate, endDate));
+var modisAveET = modisFilteredET.reduce(ee.Reducer.mean());
+var modisStateAveET = modisAveET.reduceRegion(ee.Reducer.mean(), selectedState, 100);
+var modis8DayET= ee.Number(modisStateAveET.get('ET_mean'))
+var modisAnnualET = modis8DayET.divide(9970).multiply(45.625)
+
+var netPrecipitation = prismAnnualPcpt.subtract(modisAnnualET)
+
+var featureToReturn = ee.Feature(null, {
+'year': year,
+'prismPrecip': prismAnnualPcpt,
+'modisET': modisAnnualET,
+'netprecipitation': netPrecipitation
+});
+return featureToReturn;
+};
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var precipAnnualRecord =
+ ee.FeatureCollection(years.map(yearlyPrecipChange));
+print(precipAnnualRecord)
+
+// Define the chart and print it to the console.
+var annualChart =
+    ui.Chart.feature
+        .byFeature({
+          features: precipAnnualRecord,
+          xProperty: 'year',
+          yProperties: ['prismPrecip', 'modisET', 'netprecipitation']
+        })
+        .setSeriesNames(['prismPrecipitation', 'modisET', 'netPrecipitation'])
+        .setChartType('ScatterChart')
+        .setOptions({
+          title: 'Precipitation Change in NH',
+          hAxis:
+              {title: 'Year', titleTextStyle: {italic: false, bold: true}},
+          vAxis: {
+            title: 'Precipitation (M)',
+            titleTextStyle: {italic: false, bold: true}
+          },
+          series: { 
+            0: {lineWidth: 3, color: 'steelblue', pointSize: 7}, 
+            1: {lineWidth: 3, color: 'orange', pointSize: 7},
+            2: {lineWidth: 3, color: 'red', pointSize: 7}
+          },
+          trendlines: { 0: {showR2: true, visibleInLegend: true},  
+                        1: {showR2: true, visibleInLegend: true},
+                        2: {showR2: true, visibleInLegend: true}
+
+          }
+        });
+print(annualChart);
+
+
+
+
+
+
+
+
+// Function to calculate average annual pcpt in state
+var summerPrecipChange = function(year) {
+var startDate = ee.Date.fromYMD(year, 7, 1)
+var endDate = startDate.advance(3, 'month')
+
+var prismfilteredPcpt = prismPrecip.filter(ee.Filter.date(startDate, endDate));
+var prismavePcpt = prismfilteredPcpt.reduce(ee.Reducer.mean());
+var prismstateAvePcpt = prismavePcpt.reduceRegion(ee.Reducer.mean(), selectedState, 100);
+var prismMonthlyPcpt = ee.Number(prismstateAvePcpt.get('ppt_mean'))
+var prismAnnualPcpt = prismMonthlyPcpt.multiply(3)
+prismAnnualPcpt = prismAnnualPcpt.divide(1000)
+
+var modisFilteredET = modisET.filter(ee.Filter.date(startDate, endDate));
+var modisAveET = modisFilteredET.reduce(ee.Reducer.mean());
+var modisStateAveET = modisAveET.reduceRegion(ee.Reducer.mean(), selectedState, 100);
+var modis8DayET= ee.Number(modisStateAveET.get('ET_mean'))
+var modisAnnualET = modis8DayET.divide(9970).multiply(11.5)
+
+var netPrecipitation = prismAnnualPcpt.subtract(modisAnnualET)
+
+var featureToReturn = ee.Feature(null, {
+'year': year,
+'prismPrecip': prismAnnualPcpt,
+'modisET': modisAnnualET,
+'netprecipitation': netPrecipitation
+});
+return featureToReturn;
+};
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var precipSummerRecord =
+ ee.FeatureCollection(years.map(summerPrecipChange));
+print(precipSummerRecord)
+
+// Define the chart and print it to the console.
+var summerChart =
+    ui.Chart.feature
+        .byFeature({
+          features: precipAnnualRecord,
+          xProperty: 'year',
+          yProperties: ['prismPrecip', 'modisET', 'netprecipitation']
+        })
+        .setSeriesNames(['prismPrecipitation', 'modisET', 'netPrecipitation'])
+        .setChartType('ScatterChart')
+        .setOptions({
+          title: 'Precipitation Change in NH in Summer',
+          hAxis:
+              {title: 'Year', titleTextStyle: {italic: false, bold: true}},
+          vAxis: {
+            title: 'Precipitation (M)',
+            titleTextStyle: {italic: false, bold: true}
+          },
+          series: { 
+            0: {lineWidth: 3, color: 'steelblue', pointSize: 7}, 
+            1: {lineWidth: 3, color: 'orange', pointSize: 7},
+            2: {lineWidth: 3, color: 'red', pointSize: 7}
+          },
+          trendlines: { 0: {showR2: true, visibleInLegend: true},  
+                        1: {showR2: true, visibleInLegend: true},
+                        2: {showR2: true, visibleInLegend: true}
+          }
+        });
+print(summerChart);
+
+
+

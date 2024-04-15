@@ -1,0 +1,129 @@
+// Load planet imagery 
+var planet = ee.ImageCollection("users/carlerenshaw/PlanetAmericas") 
+//bring point to main script
+var santaRosa = /* color: #0b4a8b */ee.Geometry.Point([-69.96 , -12.94]);
+//visParams for planet
+var planetVis = {
+  max: 5000,
+  gamma: 1.5
+}
+//center and add planet
+Map.centerObject(santaRosa, 10);
+Map.addLayer(planet, planetVis, 'Planet');
+
+//create geometry for mining AOI
+var miningAOI = 
+    /* color: #ffc82d */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[-70.67617126464845, -12.637335764964023],
+          [-70.67617126464845, -13.121957909849472],
+          [-69.8384637451172, -13.121957909849472],
+          [-69.8384637451172, -12.637335764964023]]], null, false);
+
+
+
+
+//filter to last year summer
+var years = ee.List.sequence(2016, 2018);
+
+
+//function to calculate difference between years
+function forestLoss(year) {
+//select the cadence to biannual
+var filteredPlanet = planet.filter(ee.Filter.eq('cadence', 'biannual'))
+//create function to add NDVI band to map
+function addNDVI(image) {
+  //normalize bands
+  var ndvi = image.normalizedDifference(['N','R']).rename('NDVI');
+  return image.addBands([ndvi]);
+}
+
+
+
+function year1image(year) { 
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(1, 'year')
+var filteredPlanetDates = filteredPlanet.filterDate(startDate, endDate);
+//add NDVI to planet image
+var planetNdvi = filteredPlanetDates.map(addNDVI);
+//convert planet images to list
+var listOfPlanetImages = planetNdvi.toList(planetNdvi.size());
+//extract first image of list
+var planetWinter2016 = ee.Image(listOfPlanetImages.get(0));
+var planetWinter2016Ndvi = planetWinter2016.select('NDVI');
+//get second image
+var planetSummer2016 = ee.Image(listOfPlanetImages.get(1));
+var planetSummer2016Ndvi = planetSummer2016.select('NDVI');
+//combine images
+var ndviPlanet2016 = ee.ImageCollection([planetWinter2016Ndvi, planetSummer2016Ndvi]);
+//Create quality mosaic 
+var greenPlanet2016 = ndviPlanet2016.qualityMosaic('NDVI'); 
+//make binary image
+var binary2016 = greenPlanet2016.gt(.78);
+return binary2016
+}
+var binary2016 = year1image(year)
+
+
+function year2image(year) {
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var startDate2 = startDate.advance(1, 'year')
+var endDate2 = startDate2.advance(1, 'year')
+var filteredPlanetDates2 = filteredPlanet.filterDate(startDate2, endDate2);
+//add NDVI to planet image
+var planetNdvi2 = filteredPlanetDates2.map(addNDVI);
+//convert planet images to list
+var listOfPlanetImages2 = planetNdvi2.toList(planetNdvi2.size());
+//extract second year first image image of list
+var planetWinter2017 = ee.Image(listOfPlanetImages2.get(0));
+var planetWinter2017Ndvi = planetWinter2017.select('NDVI');
+//get second year second image
+var planetSummer2017 = ee.Image(listOfPlanetImages2.get(1));
+var planetSummer2017Ndvi = planetSummer2017.select('NDVI');
+//combine images
+var ndviPlanet2017 = ee.ImageCollection([planetWinter2017Ndvi, planetSummer2017Ndvi]);
+//Create quality mosaic 
+var greenPlanet2017 = ndviPlanet2017.qualityMosaic('NDVI'); 
+//make binary image
+var binary2017 = greenPlanet2017.gt(.78);
+return binary2017
+}
+var binary2017 = year2image(year)
+
+
+var loss2016 = binary2016.subtract(binary2017)
+
+// Multiply loss pixels by their area 
+var areaImage = loss2016.multiply(ee.Image.pixelArea()); 
+var area = areaImage.reduceRegion({
+ reducer: ee.Reducer.sum(),
+ geometry: miningAOI,
+ scale: 10,
+  maxPixels: 1.0e9
+ });
+ 
+ var featureToReturn = ee.Feature(null, {
+'Year': year,
+'Area Loss': area,
+});
+return featureToReturn;
+}
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var forestAreaRecord =
+ ee.FeatureCollection(years.map(forestLoss));
+print(forestAreaRecord)
+
+// export
+Export.table.toDrive({
+ collection: forestAreaRecord,
+ folder: 'earthengine_exercise9',
+ fileNamePrefix: 'forestArea1',
+ fileFormat: 'CSV'});

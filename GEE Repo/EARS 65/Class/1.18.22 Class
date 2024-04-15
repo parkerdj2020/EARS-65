@@ -1,0 +1,109 @@
+//Load the ERA5-Land Monthly Averaged reanalysis dataset
+var eraDataset = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY");
+
+//Select the surface air temp and total precip bands
+var surfaceTemp = eraDataset.select('temperature_2m');
+var totalPrecip = eraDataset.select('total_precipitation');
+
+// Load state bondaries from TIGER dataset
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States")
+
+// Filter stateBoundaries for particular USPS state abbreviation
+// Using ee.FeatureCollection.filterMetadata()
+//var selectedState = stateBoundaries.filterMetadata('STUSPS', 'equals', 'NH');
+
+// Equivalent filter of stateBoundaries for particular USPS state abbreviation
+// Using ee.FeatureCollection.filter( ee.Filter.metadata() )
+//var selectedState = stateBoundaries.filter(ee.Filter.metadata('STUSPS', 'equals', 'NH'));
+
+// Since ee.Filter.metadata() depracated, GEE suggests filter
+// Using ee.FeatureCollection.filter( ee.Filter.eq() )
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+
+// Center map on selected state
+Map.centerObject(selectedState, 5);
+
+// Define visParams dictionary and display for selected state
+var shown = true; // true or false
+var opacity = 0.5; // number [0-1]
+var stateVis = {color: 'green'}; 
+
+// Add the selected state to the map display
+Map.addLayer(selectedState, stateVis, 'NH', shown, opacity);
+
+
+// Get NH average tempearature for 2018
+var year = 2017
+var startDate = ee.Date.fromYMD(year, 1, 1)
+
+// Use ee.Date.advance() to define endDate as end of year
+var endDate = startDate.advance(1, 'year');
+
+// Use ee.ImageCollection.filter( ee.Filter.date() ) to filter surfaceTemp for given year
+var filteredTemp = surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+
+// Reduce image collection to single image with mean temp
+var aveTemp = filteredTemp.reduce(ee.Reducer.mean());
+
+//reduce to mean temp, check metadata and figure out units, 
+//add image to display including correct visParams	
+var aveTempVis = {
+  min: 5,
+  max: 15
+}
+	
+// Convert to degC
+aveTemp = aveTemp.subtract(273.15);
+
+Map.addLayer(aveTemp, aveTempVis, 'aveTemp');
+
+//Define reduce region parameters to get mean in selectedState
+var reduceRegionParams = {
+  reducer: ee.Reducer.mean(),
+  geometry: selectedState.geometry(),
+  scale: 100
+}
+
+
+// Use ee.Image.reduceRegion() to get mean in selectedState
+var stateAveTemp = aveTemp.reduceRegion(reduceRegionParams);
+
+// print stateAveTemp
+print(stateAveTemp.get('temperature_2m_mean'));
+
+//Reorganize above code to get statewide ave temp for a given year into a function
+
+// Function to calculate average annual temperature in state
+// ---------------------------------------------------------
+// ** var yearlyAveTemp = 
+
+
+// ---------------------------------------------------------
+
+// Test aveTemp function
+//print(yearlyAveTemp(2018));
+
+
+
+// Use ee.List.sequence() to create list of years for which there are ERA5 data (1981 - 2000)
+//** var years = 
+
+// Map the yearlyAveTemp function to each element in the list and
+// organize the returned ee.Features (from the function) 
+// into a Feature Collection 
+// var stateTempRecord =  ee.FeatureCollection( );
+
+// Print stateTempRecord
+// print(stateTempRecord);
+  
+
+
+// Export temp record
+//Export.table.toDrive({
+//  collection: stateTempRecord,
+//  folder: 'earthengine/exercise4',
+//  fileNamePrefix: 'NhTemperatureTable',
+//  fileFormat: 'CSV'});
+  
+
+

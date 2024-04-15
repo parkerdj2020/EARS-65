@@ -1,0 +1,128 @@
+// Load planet imagery 
+var planet = ee.ImageCollection("users/carlerenshaw/PlanetAmericas") 
+//bring point to main script
+var santaRosa = /* color: #0b4a8b */ee.Geometry.Point([-69.96 , -12.94]);
+//visParams for planet
+var planetVis = {
+  max: 5000,
+  gamma: 1.5
+}
+//center and add planet
+Map.centerObject(santaRosa, 10);
+Map.addLayer(planet, planetVis, 'Planet');
+
+//create geometry for mining AOI
+var miningAOI = 
+    /* color: #ffc82d */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[-70.67617126464845, -12.637335764964023],
+          [-70.67617126464845, -13.121957909849472],
+          [-69.8384637451172, -13.121957909849472],
+          [-69.8384637451172, -12.637335764964023]]], null, false);
+
+//select the cadence to biannual
+var filteredPlanet = planet.filter(ee.Filter.eq('cadence', 'biannual'))
+
+//filter to selected dates
+var startDate = ee.Date.fromYMD(2019, 1, 1);
+var endDate = ee.Date.fromYMD(2021, 1, 1);
+
+//create function to add NDVI band to map
+function addNDVI(image) {
+  //normalize bands
+  var ndvi = image.normalizedDifference(['N','R']).rename('NDVI');
+  return image.addBands([ndvi]);
+}
+
+
+var filteredPlanetDates = filteredPlanet.filterDate(startDate, endDate);
+
+
+//add NDVI to planet image
+var planetNdvi = filteredPlanetDates.map(addNDVI);
+//convert planet images to list
+var listOfPlanetImages = planetNdvi.toList(planetNdvi.size());
+
+
+//extract first image of list
+var planetWinter2016 = ee.Image(listOfPlanetImages.get(0));
+
+
+//create image of 2016 with just NDVI
+var planetWinter2016Ndvi = planetWinter2016.select('NDVI');
+//make binary image
+var binaryWinter2016 = planetWinter2016Ndvi.gt(.76);
+binaryWinter2016 = binaryWinter2016.updateMask(binaryWinter2016); 
+
+//add both to map
+var binaryImageParams = {
+  palette: 'green'
+};
+//Map.addLayer(planetWinter2016Ndvi, {}, 'PlanetWinter2016');
+//Map.addLayer(binaryWinter2016, binaryImageParams, 'BinaryWinter2016');
+
+//get second image
+var planetSummer2016 = ee.Image(listOfPlanetImages.get(1));
+var planetWinter2016Ndvi = planetWinter2016.select('NDVI');
+var planetSummer2016Ndvi = planetSummer2016.select('NDVI');
+//combine images
+var ndviPlanet2016 = ee.ImageCollection([planetWinter2016Ndvi, planetSummer2016Ndvi]);
+//Create quality mosaic 
+var greenPlanet2016 = ndviPlanet2016.qualityMosaic('NDVI'); 
+//make binary image
+var binary2016 = greenPlanet2016.gt(.78);
+//binary2016 = binary2016.updateMask(binary2016); 
+//Map.addLayer(greenPlanet2016, {}, 'greenPlanet2016');
+//Map.addLayer(binary2016, binaryImageParams, 'binary2016');
+
+
+
+
+//extract first image of list
+var planetWinter2017 = ee.Image(listOfPlanetImages.get(2));
+
+
+//create image of 2016 with just NDVI
+var planetWinter2017Ndvi = planetWinter2017.select('NDVI');
+//make binary image
+var binaryWinter2017 = planetWinter2017Ndvi.gt(.76);
+//binaryWinter2017 = binaryWinter2017.updateMask(binaryWinter2017); 
+
+/*
+//get second image
+var planetSummer2017 = ee.Image(listOfPlanetImages.get(3));
+var planetWinter2017Ndvi = planetWinter2017.select('NDVI');
+var planetSummer2017Ndvi = planetSummer2017.select('NDVI');
+//combine images
+var ndviPlanet2017 = ee.ImageCollection([planetWinter2017Ndvi, planetSummer2017Ndvi]);
+//Create quality mosaic 
+var greenPlanet2017 = ndviPlanet2017.qualityMosaic('NDVI'); 
+//make binary image
+*/
+
+
+//var binary2017 = greenPlanet2017.gt(.78);
+var binary2017 = binaryWinter2017
+
+//binary2017 = binary2017.updateMask(binary2017); 
+//Map.addLayer(greenPlanet2017, {}, 'greenPlanet2017');
+//Map.addLayer(binary2017, binaryImageParams, 'binary2017');
+
+var loss2016 = binary2016.subtract(binary2017)
+
+// Multiply loss pixels by their area 
+var areaImage = loss2016.multiply(ee.Image.pixelArea()); 
+var area = areaImage.reduceRegion({
+ reducer: ee.Reducer.sum(),
+ geometry: miningAOI,
+ scale: 10,
+ maxPixels: 1.0e9
+ });
+ 
+ 
+ print('Area Lost: ', area);

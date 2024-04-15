@@ -1,0 +1,127 @@
+// Long Island Sound AOI
+var liSoundAOI = ee.Geometry.Polygon(
+        [[[-72.82240928122698, 41.83252484360635],
+          [-72.82240928122698, 41.10397835037745],
+          [-72.20168174216448, 41.10397835037745],
+          [-72.20168174216448, 41.83252484360635]]], null, false);
+
+// Thames River (no Irene sediment)
+var cleanWater = ee.Geometry.Polygon(
+        [[[-71.35097068910464, 41.71202010197034],
+          [-71.35097068910464, 41.67818092565198],
+          [-71.31389183168277, 41.67818092565198],
+          [-71.31389183168277, 41.71202010197034]]], null, false);
+
+// CT River Irene plume water
+var ireneWater = ee.Geometry.Polygon(
+        [[[-72.41213450666531, 41.24637979791928],
+          [-72.41213450666531, 41.233987998383945],
+          [-72.37642894025906, 41.233987998383945],
+          [-72.37642894025906, 41.24637979791928]]], null, false);
+
+//Load the Landsat 5 surface reflectance dataset
+var landsatDataset = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2');
+
+// Filter dataset for year 2011
+var filteredLsDataset = landsatDataset.filterDate('2011-01-01', '2011-12-31');
+
+// Apply NASA scaling to Landsat5 band intensities - see Landsat5 example in GEE documentation
+// This is Landsat 5 specific - it scales all band intensities between 0 and 1
+function applyScaleFactors(image) {
+  var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
+  var thermalBand = image.select('ST_B6').multiply(0.00341802).add(149.0);
+  return image.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true);
+}
+filteredLsDataset = filteredLsDataset.map(applyScaleFactors);
+
+
+// Filter for those images containing the Long Island Sound AOI
+var ls_AOI = filteredLsDataset.filterBounds(liSoundAOI);
+
+//Filter for those images with < 25% cloud cover
+var ls_AOI_cf = ls_AOI.filterMetadata('CLOUD_COVER', 'less_than', 25);
+
+//Sort the filtered collection by image date
+var ls_AOI_sorted = ls_AOI_cf.sort('system:time_start');
+
+//-------------------------------------------------------------------------
+//Function to filter the sorted image collection to the top 10 in a given month
+//-------------------------------------------------------------------------
+var getMonthImage = function(monthNumber) {
+  
+  // Filter to get images in given month
+  var monthImages = ls_AOI_sorted.filter(ee.Filter.calendarRange({
+    start: monthNumber,
+    field: 'month'}));
+    
+  // Grab first image in month (for Sept this is Irene image)
+  var firstImage = monthImages.first();
+  
+  // Calculate band means in ireneWater AOI
+  var ireneBandMeans = firstImage.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: ireneWater,
+    scale: 10
+  });
+  
+  // Sort the images by cloud cover
+  var monthImages_sorted = monthImages.sort('CLOUDY_PIXEL_PERCENTAGE');
+  
+  // Grab only top 10 images
+  var topImages = monthImages_sorted.limit(10);
+  
+  // Average top images
+  var aveImage = topImages.mean();
+  
+  //  Calculate band means in cleanWater AOI
+  var cleanBandMeans = aveImage.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: cleanWater,
+    scale: 10
+  });
+  
+  // Create feature to return
+  var featureToReturn = ee.Feature(null, {
+    'month': monthNumber,
+    'firstImage': firstImage,
+    'aveImage' : aveImage,
+    // Irene plume color
+    'ireneBlue' :  ireneBandMeans.get('SR_B1'),
+    'ireneGreen' : ireneBandMeans.get('SR_B2'),
+    'ireneRed' :   ireneBandMeans.get('SR_B3'),
+    // clean water color
+    'cleanBlue' :  cleanBandMeans.get('SR_B1'),
+    'cleanGreen' : cleanBandMeans.get('SR_B2'),
+    'cleanRed' :   cleanBandMeans.get('SR_B3'),
+	});
+  return featureToReturn;
+};
+//-------------------------------------------------------------------------
+
+
+//Testing function
+var septFeature = getMonthImage(9);
+
+print(septFeature);
+
+//Get images from feature.  since using .get(), cast to appropriate ee.Type()
+var ireneImage = ee.Image(septFeature.get('firstImage'));
+var aveImage = ee.Image(septFeature.get('aveImage'));
+
+
+// Center map on liSound AOI
+Map.centerObject(liSoundAOI, 8);
+
+var lsVisParams = {
+  min: 0,
+  max: 0.15,
+  bands: ['SR_B3', 'SR_B2', 'SR_B1']
+};
+
+// Add images to map
+//Map.addLayer(aveImage, lsVis, 'Average');
+Map.addLayer(ireneImage, lsVisParams, 'Irene');
+Map.addLayer(ireneWater, {color: 'green'}, 'Irene AOI')
+Map.addLayer(cleanWater, {color: 'blue'}, 'Clean AOI')
+

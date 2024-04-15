@@ -1,0 +1,82 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var Landsat8_SR = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2"),
+    Site_A = /* color: #d63000 */ee.Geometry.Polygon(
+        [[[31.572830407472942, 23.22130430938148],
+          [31.55669423803935, 23.17933492091631],
+          [31.548797814699505, 23.176494411244068],
+          [31.548797814699505, 23.170813211037657],
+          [31.556007592531536, 23.169866320894002],
+          [31.561500756594036, 23.14082510558058],
+          [31.587249963137005, 23.139878003457643],
+          [31.637375085207317, 23.20426569549019],
+          [31.645958154054973, 23.224774871689164],
+          [31.632225243898723, 23.23928715477001],
+          [31.56287404760966, 23.23802527975259],
+          [31.557724206301067, 23.22319735454946]]]),
+    Site_B = /* color: #98ff00 */ee.Geometry.Polygon(
+        [[[31.683380334230755, 23.017961793016585],
+          [31.67102071509013, 23.01416988141164],
+          [31.67205068335185, 22.962968646841812],
+          [31.69745656714091, 22.96454922208889],
+          [31.73247548803935, 22.972135726072086],
+          [31.737625329347942, 22.97877356777595],
+          [31.73796865210185, 22.98730745654367],
+          [31.73693868384013, 23.012905887187134],
+          [31.69848653540263, 23.020173692219014]]]),
+    Site_C = /* color: #0b4a8b */ee.Geometry.Polygon(
+        [[[31.213919052680044, 22.63773979230903],
+          [31.194692978461294, 22.601611625908625],
+          [31.23520506342223, 22.583226987404093],
+          [31.257864365180044, 22.62062763354586]]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// Earth Engine script "Toshka" by Jane Q Student
+
+// Display a point (lon 31.4, lat 22.9) and center the map on it
+var toshkaPoint = ee.Geometry.Point([31.4, 22.9]);
+Map.centerObject(toshkaPoint, 12);
+
+// Specify a time period to search
+var startDate = "2013-01-01";
+var endDate = "2024-12-31";
+
+// Set a maximum acceptable cloud cover (5%)
+var cloud_score = 5; 
+
+// Select images by location, date, and cloud cover
+var L8images = ee.ImageCollection(Landsat8_SR
+  .filterDate(startDate,endDate)
+  .filterMetadata("CLOUD_COVER", "less_than", cloud_score)
+  .filterBounds(toshkaPoint));
+
+// Report the number of images
+var count = L8images.size();
+print("Total number of images during the time window: ", count);
+
+// Use a function to add NDVI as a new band on a given image
+var addNDVI = function(myImage) {
+  var NDVI = myImage.normalizedDifference(["SR_B5","SR_B4"]);
+  return myImage
+  .addBands(NDVI.rename('NDVI'));
+};
+
+// Apply the function to add NDVI bands to every image in the collection
+// Also, select only the NDVI band
+var L8ndvi = L8images.map(addNDVI).select("NDVI");
+
+// Find the maximum and minimum NDVI during the time period
+var maxNDVI = L8ndvi .reduce(ee.Reducer.max());
+var minNDVI = L8ndvi .reduce(ee.Reducer.min());
+
+// Define a circular buffer and clip the imagery
+var region = toshkaPoint.buffer(70000);
+var clippedMax = ee.Image(maxNDVI.clip(region)).rename('maxNDVI');
+var clippedMin = ee.Image(minNDVI.clip(region)).rename('minNDVI');
+
+// Add the NDVI data to the map
+Map.addLayer(clippedMax, {min: 0, max: 0.5}, "Max NDVI");
+Map.addLayer(clippedMin, {min: 0, max: 0.5}, "Min NDVI");
+
+// Print some time-series charts of NDVI
+print(ui.Chart.image.series(L8ndvi, Site_A, ee.Reducer.mean(), 30));
+print(ui.Chart.image.series(L8ndvi, Site_B, ee.Reducer.mean(), 30));
+print(ui.Chart.image.series(L8ndvi, Site_C, ee.Reducer.mean(), 30));

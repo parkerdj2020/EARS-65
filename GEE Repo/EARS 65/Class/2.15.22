@@ -1,0 +1,193 @@
+//Load the Sentinel 1 SAR dataset 
+ var sarDataset = ee.ImageCollection("COPERNICUS/S1_GRD") 
+ 
+// Filter to retainonly the VV polarization data
+var vvSarDataset= sarDataset
+.filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+.select('VV');
+
+// Load the SRTM data to create hillsade image
+var srtmImage = ee.Image('CGIAR/SRTM90_V4');
+ 
+// Add European Commission's Joint Research Centre (JRC) mask on surface water 
+// seasonality to mask  pixels from areas of "permanent" water defined as
+// where there is water > 10 months of the year.
+var surfaceWater = ee.Image("JRC/GSW1_3/GlobalSurfaceWater").select('seasonality');
+var surfaceWater_mask = surfaceWater.unmask().gte(10);
+
+
+
+//*************** Flood Locations *******************
+
+
+//-------------------
+//          England 2020
+//-------------------
+var dates_pre_flood =['2020-02-10','2020-02-24'];
+var dates_post_flood=['2020-02-24','2020-03-15'];
+var map_center=[52.75585,-2.99737];
+var Direction = "DESCENDING";
+
+
+/*
+//-------------------
+//          Myanmar 2015
+//-------------------
+var dates_pre_flood =['2015-03-08','2015-03-25'];
+var dates_post_flood=['2015-09-01','2015-09-08'];
+var map_center=[24.82,94.92];
+var Direction = "ASCENDING";
+*/
+
+/*
+//-------------------
+//          Jakarta 2021
+//-------------------
+var dates_pre_flood =['2021-02-05','2021-02-15'];
+var dates_post_flood=['2021-02-22','2021-03-10'];
+var map_center=[-6.04, 107.03];
+var Direction = "DESCENDING";
+*/
+
+/*
+//-------------------
+//          France 2016
+//-------------------
+var dates_pre_flood =['2016-05-01','2016-05-17'];
+var dates_post_flood=['2016-05-30','2016-06-01'];
+var map_center=[48.82, 3.01];
+var Direction = "ASCENDING";
+var floodAOI = ee.Geometry.Polygon(
+        [[[2.9829218129474855, 48.82231264018161],
+          [2.9829218129474855, 48.80931351312304],
+          [3.0395700673420167, 48.80931351312304],
+          [3.0395700673420167, 48.82231264018161]]], null, false);
+
+*/
+
+
+/*
+//-------------------
+//          Houston 2017
+//-------------------
+var dates_pre_flood =['2017-07-25','2017-08-15'];
+var dates_post_flood=['2017-08-26','2017-09-10'];
+var map_center=[29.70, -95.36];
+var Direction = 'DESCENDING';
+var floodAOI = ee.Geometry.Polygon(
+        [[[-95.39356035611725, 29.710388402456847],
+          [-95.39356035611725, 29.67996840477432],
+          [-95.31837267301178, 29.67996840477432],
+          [-95.31837267301178, 29.710388402456847]]], null, false);
+*/
+
+//*****************************************************************
+
+
+// Center map display on flood region
+var Latitude  = map_center[0];
+var Longitude = map_center[1];
+Map.setCenter(Longitude,Latitude, 10);
+
+// Get the a hillshade image of srtm and add to display
+var hillShade = ee.Terrain.hillshade(srtmImage);
+//Map.addLayer(hillShade, {}, 'Hillshade');
+
+
+// Get Pre flood image
+var startDate = ee.Date(dates_pre_flood[0]);
+var endDate = ee.Date(dates_pre_flood[1]);
+
+var preImage = vvSarDataset
+    .filterBounds(ee.Geometry.Point([Longitude, Latitude]))
+    .filter(ee.Filter.eq('orbitProperties_pass', Direction))
+    .filterDate(startDate, endDate)
+    .mosaic();
+
+
+// Get Post flood image
+var startDate = ee.Date(dates_post_flood[0]);
+var endDate = ee.Date(dates_post_flood[1]);
+
+// The mosaic() method combines the last images in the image collection.  So that the 
+// images taken right after onset of flooding are at the end of the collection, need
+// to do an ascending = false sort of collection before the mosaoic() method.
+var postImage = vvSarDataset
+    .filterBounds(ee.Geometry.Point([Longitude, Latitude]))
+    .filter(ee.Filter.eq('orbitProperties_pass', Direction))
+    .filterDate(startDate, endDate)
+    .sort('system:time_start', false)
+    .mosaic();
+    
+
+// Add the pre and post SAR images to the display
+// sar visParams
+var sarVis = {
+  min: -30,
+  max: 0
+}
+
+//Add SAR images to display
+//Map.addLayer(preImage, sarVis, 'Before flood');
+//Map.addLayer(postImage, sarVis, 'After flood');
+
+
+// Make an false color composite with the pre-flood image in the red channel, 
+// and the post-flooding image in the blue and green channels, 
+// use .select() method to rename the bands
+var falseColor = preImage.addBands(postImage);
+falseColor = falseColor.addBands(postImage).select(['VV', 'VV_1', 'VV_2'], ['pre', 'post', 'post1']);
+
+
+// Add the false color images to the display
+// false color visParams
+var falseColorVis = {
+  min: -30,
+  max: 0
+}
+//Map.addLayer(falseColor, sarVis, 'False Color')
+
+
+
+// Reduce the radar noise by smoothing  
+var smoothing_radius = 100;
+var preImage = preImage.focal_mean(smoothing_radius, 'circle', 'meters');
+var postImage = postImage.focal_mean(smoothing_radius, 'circle', 'meters');
+
+
+
+
+// Create image of difference in smoothed radar intensities to identify "flooded" areas.
+var sarDifference = postImage.subtract(preImage);
+
+
+// sar difference visParams
+var sarDifferenceVis = {
+  min: -10,
+  max: 10
+}
+
+//Map.addLayer(sarDifference, sarDifferenceVis, 'After - before');
+
+
+// Create binary image with threshold change
+var diff_binary = sarDifference.lt(-3);
+
+//Map.addLayer(diff_binary, {min: 0, max: 1, palette: ['white', 'red']}, 'Binary Image')
+
+
+// Display surface water mask
+//Map.addLayer(surfaceWater_mask, {min:0,max:1, palette: ['white', 'blue']}, 'Surface Water');
+
+//Define landMask as areas w/o permanent surface water
+var landMask = surfaceWater_mask.not();
+
+//Combine binary flood and land masks
+var flooded_mask = diff_binary.multiply(landMask);
+
+
+//Update mask diff_binary mask with flooded_maks
+var flooded = diff_binary.updateMask(flooded_mask);
+
+Map.addLayer(flooded, {min:0,max:1, palette: "blue"}, 'masked flood');
+

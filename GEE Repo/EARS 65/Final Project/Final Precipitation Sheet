@@ -1,0 +1,83 @@
+//Load the ERA5-Land Monthly Averaged dataset
+var chirpsDataset = ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY")
+var prismDataset = ee.ImageCollection("OREGONSTATE/PRISM/AN81d")
+ 
+//Select the surface air temp band
+var chripsPrecip = chirpsDataset.select('precipitation');
+var primsPrecip = prismDataset.select('ppt')
+ 
+// Load country features from Large Scale International Boundary (LSIB) dataset.
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States")
+ 
+// ee.Filter.metadata() depracated, suggest use ee.Filter.eq() instead
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+ 
+// Center map on selected state
+Map.centerObject(selectedState, 5);
+// Define visParams dictionary and display for selected state
+var shown = true; // true or false
+var opacity = 0.5; // number [0-1]
+var stateVis = {color: 'red'}; 
+ 
+// Add the selected state to the map display
+Map.addLayer(selectedState, stateVis, 'NH', shown, opacity);
+ 
+ 
+//------------------------------------------------------------
+// Function to calculate ave temp in NH for a given day
+ 
+var getNHprecip = function(image) {
+  
+  // Get image date
+  var imageDate = ee.Date(image.get('system:time_start'));
+ 
+  //Define reduce region parameters
+  var reduceRegionParams = {
+    reducer: ee.Reducer.mean(),
+    geometry: selectedState.geometry(),
+    scale: 100,
+  }
+ 
+  // reduce region to get mean
+                var stateAveTemp  =   
+     image.reduceRegion(reduceRegionParams);
+     
+     
+  // Extract ave  temp
+  var aveTemp = stateAveTemp.get('precipitation');
+  
+ 
+// Create feature to return
+  var featureToReturn = ee.Feature(null, {
+    'year' : imageDate.get('year'),
+    'dayOfYear' : imageDate.getRelative('day', 'year'),
+    'precipitation': aveTemp,
+    });
+  return featureToReturn;
+  
+}
+ 
+var year = 2011
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(12, 'month')
+var filteredTemp = 
+     chripsPrecip.filter(ee.Filter.date(startDate, endDate));
+     
+     
+// Map the getAveNHTemp function to each element in the 
+// filteredTemp image collection and
+// organize the returned ee.Features (from the function) 
+// into a Feature Collection 
+var stateTempRecord = 
+  ee.FeatureCollection(filteredTemp.map(getNHprecip));
+     
+
+print(stateTempRecord);
+/*
+// Export temp record
+Export.table.toDrive({
+  collection: stateTempRecord,
+  folder: 'earthengine/FinalProjectChirpsPrecip',
+  fileNamePrefix: 'dailyNHchirpsPrecip2019',
+  fileFormat: 'CSV'});
+*/

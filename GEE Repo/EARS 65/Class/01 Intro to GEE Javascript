@@ -1,0 +1,270 @@
+
+// ----------- GEE Strings -----------------------
+// Store data at Google using ee.Type() containers
+
+// Define a string that exists on the google’s computers.
+//var googleString = ee.String('This is on Google computer'); 
+//print('String at Google: ' + googleString.getInfo());
+
+
+// Notice that output from above is not what you expect
+// Your computer does not know how to "get" contents of a container
+// So it just repeats exactly how googleString was defined
+
+// To solve this problem, all GEE containers include "methods" used
+// to work with the data in the container
+// To see what methods are available, look at ee.String in Docs
+
+
+// The ee.String container includes the method getInfo() that
+// "retrieves the value of the object from the server"
+// Methods are "called" using the dot notation
+
+// Print the contents of the googleString container using  getInfo()
+//**
+
+// Clicking on JSON formats the output making it easier to read
+
+
+
+
+// As with classic Javascript, you can use the prompt() command
+
+// Create a variable with the name of the user
+//var userName = ee.String(prompt('What is your name?'));
+// Print the value of the variable username
+//print('Hello, ' + userName.getInfo());
+
+
+// What's wrong with the code above?
+
+
+
+
+
+
+// ----------- GEE Numbers -----------------------
+// Define a number that exists on Google’s computers.
+//var googleNumber = ee.Number(100);
+//print('Number at Google: '+ googleNumber.getInfo());
+
+
+
+// Supposed you wanted to add 12 to googleNumber
+// Add 12 to googleNumber
+//var newNumber = googleNumber.add(12);
+
+
+//print('Google Number: ' + newNumber.getInfo());
+
+
+
+// Because there is no ee.TYPE() in the above, the command is executed
+// by your computer.  Your computer does not know the value of googleNumber
+
+// Add 12 to googleNumber
+//**
+//print('New number: ' + newNumber);
+
+
+
+// While the above works, newNumber is stored on your computer
+// Goal in GEE is to store all data at Google
+
+// One approach it to try to add the value directly to googleNumber
+
+// Define a number that exists on Google’s computers.
+//var googleNumber = ee.Number(100);
+// Add 12 to googleNumber
+//**
+//print('New number: ' + googleNumber);
+
+
+
+// This approach fails 
+
+
+
+// Check the Docs for ee.Number
+// See that it includes a method add() that
+// "Adds the first value to the second"
+// "first value" is what is current in the container
+// "second value" is the number "passed" to the add() method
+
+// Define a number that exists on Google’s computers.
+//var googleNumber = ee.Number(100);
+// Add 12 to googleNumber
+
+//var newnumber = googleNumber.add(12)
+
+//('New number: ' + newnumber.getInfo());
+
+// Why does this fail?
+
+
+// Try defining a new variable
+
+// Define a number that exists on Google’s computers.
+//var googleNumber = ee.Number(100);
+// Add 12 to googleNumber
+//** 
+//print('New number: ' + newNumber);
+
+
+
+// The ee.Number in the output tells us that the add() method created 
+// a new ee.Number() variable newNumber.  I.e., newNumber is now stored 
+// at Google.  This is true of most GEE methods
+
+// Test the by getting the value of newNumber
+//**
+
+
+
+// Oftentimes rather than creating a new variable, such as newNumber,
+// you just want to update the value of googleNumber
+// Before you tried to do this using
+// Add 12 to googleNumber
+//var googleNumber = ee.Number(100);
+
+
+//var googleNumber = googleNumber.add(12);
+//print('Updated number: ' + googleNumber.getInfo());
+
+
+// Why does this fail?
+
+
+
+
+// Define a number that exists on Google’s computers.
+//var googleNumber = ee.Number(100);
+// Add 12 to googleNumber
+//**
+//print('Updated number: ' + googleNumber);
+
+// How do you fix the above?
+
+
+
+
+
+// ee.Number includes a large number of math methods
+// Try the log() method
+
+// Define a number that exists on Google’s computers
+//var googleNumber = ee.Number(100);
+// Use "," rather than "+" to print on separate lines
+// You can string together methods
+
+//var newNumber = googleNumber.log();
+
+//print('New Log Number: ', newNumber);
+
+
+// Why is log(100) = 4.6?
+
+
+
+
+// Define a number that exists on Google’s computers
+///var googleNumber = ee.Number(100);
+// Print log10() value
+
+///var newNumber=googleNumber.log10()
+
+///print ('New Number: ', newNumber);
+
+
+
+// ----------- GEE Lists -----------------------
+//Try the following
+// Define a list.
+///var listByThrees = ee.List([3, 6, 9, 12, 155]);
+// print entire list
+//print('List: ' + listByThrees.getInfo());
+
+// print third item
+
+///print('List: ' + listByThrees.getInfo(), listByThrees.getNumber(3));
+
+// Notice the difference between getInfo() and get()
+// Does get() return the third item?
+
+
+
+
+// ----------- GEE Dictionaries -----------------------
+// For more complicated containers, getInfo() only limited value
+// Try printing entire container
+// A visual parameters dictionary
+///var visualParameters = ee.Dictionary({ min: 100, max: 400,});
+// For more complicated containers print the entire container
+
+///print(visualParameters);
+
+
+
+// You get specific values in a dictionary using the get() method
+///var maxValue = visualParameters.get('max');
+// Print the returned variable.
+///print('Print max value: '+ maxValue.getInfo());
+
+
+// How do you correct the above?
+
+
+
+
+// ----------- GEE Dates -----------------------
+// Dates are challenging in all programming languages
+// Consider the date:
+//
+//              5/4/1990
+//
+// What day is this?
+
+
+
+// by convention, GEE Dates are always year-month-day
+
+// Define a date in Earth Engine.
+///var Date = ee.Date.fromYMD(1990,5,4);
+
+
+///print('Date:', Date.getInfo());
+
+
+
+
+// In GEE, all dates are actually times, so this ouputs date and time
+// You can get the current date and time using the Javascript Date.now() command
+
+// Set a variable to current time.
+//var currentTime = Date.now();
+
+//print('Current time: ', currentTime);
+
+
+
+// All date/times in Javascript stored as milliseconds since
+// January 1st, 1970
+
+
+
+// To store the date on the Google server, "wrap" Date.now() in an ee.Date
+// Set a variable to current time.
+
+///var currentTime = ee.Date(Date.now());
+
+
+
+///print('Current time: ', currentTime.getInfo());
+
+
+
+
+
+
+
+

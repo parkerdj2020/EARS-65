@@ -1,0 +1,129 @@
+var saltLakeAOI = /* color: #d63000 */ee.Geometry.Polygon(
+        [[[-112.92514372669145, 41.58732408740962],
+          [-112.98419524036332, 41.567805362205725],
+          [-112.9773287852852, 41.4958433744572],
+          [-112.96496916614457, 41.42689050275296],
+          [-112.90866423450395, 41.33930749018671],
+          [-112.84686613880082, 41.25573628668486],
+          [-112.83038664661332, 41.21442706577495],
+          [-112.77545500598832, 41.13897045265912],
+          [-112.75246964983961, 41.02281635033408],
+          [-112.66732560687086, 41.00312794493345],
+          [-112.64397965960524, 41.0735645553286],
+          [-112.58080827288649, 41.08598672045484],
+          [-112.53274308733961, 41.002091550086185],
+          [-112.53823625140211, 40.94506473713379],
+          [-112.49566422991774, 40.93054095092208],
+          [-112.37344132952711, 40.7414412303012],
+          [-112.36520158343336, 40.68106537361859],
+          [-112.20589982562086, 40.75392595137172],
+          [-112.15783464007399, 40.809038762898226],
+          [-112.20864640765211, 40.856835450132024],
+          [-112.27044450335524, 40.93987803721552],
+          [-112.2845104878394, 41.05596246928965],
+          [-112.17602049760502, 41.10151112519249],
+          [-112.2680309956519, 41.190446888567095],
+          [-112.25292479448002, 41.23900033581115],
+          [-112.3778942769019, 41.22867283334461],
+          [-112.43694579057377, 41.19148031585313],
+          [-112.52208983354252, 41.221442610845585],
+          [-112.52637629777554, 41.29070620495071],
+          [-112.50715022355679, 41.328873531021465],
+          [-112.54285578996304, 41.3360918628874],
+          [-112.56482844621304, 41.398960611585046],
+          [-112.59366755754117, 41.41544071783201],
+          [-112.61976008683804, 41.40617117241733],
+          [-112.66645198136929, 41.41338093315322],
+          [-112.72962336808804, 41.4586811070335],
+          [-112.80515437394742, 41.53685238337402],
+          [-112.79966120988492, 41.58412073532497],
+          [-112.82026057511929, 41.62108923966448],
+          [-112.75571589738492, 41.650854020134716],
+          [-112.82712703019742, 41.66829594874237],
+          [-112.85047297746304, 41.65906257499651],
+          [-112.92051081925992, 41.62006262276215]]]);
+
+//bring in DataSet
+var ls7Dataset = ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA")
+
+//filter to last year summer
+var years = ee.List.sequence(1999, 2021);
+
+//start function
+var lakeArea = function(year) {
+//visParams for NDWI
+var ndwiParams = {
+  min: -1,
+  max: 1,
+  palette: ['green', 'white', 'blue']
+};
+//create visParams for lake image
+var lake_visParams = {
+  min: 0,
+  max:.3,
+  bands: ['B3', 'B2', 'B1'],
+}
+//water only visparams
+var waterOnlyVis = {
+  min:0,
+  max:1,
+  palette: ['grey', 'blue']
+};
+//Center over Lake
+Map.centerObject(saltLakeAOI, 8)
+
+var startDate = ee.Date.fromYMD(year, 6, 1)
+var endDate = startDate.advance(3, 'month')
+var ls7_Year = ls7Dataset.filterDate(startDate, endDate)
+//filter to AOI
+var ls7_Year_AOI = ls7_Year.filterBounds(saltLakeAOI);
+//sort by ascending cloud coverage
+var mosaicImage = ls7_Year_AOI.sort({ property: 'CLOUD_COVER',
+                                                ascending: false})
+                                            .mosaic();
+
+// Compute the Normalized Difference Water Index (NDWI).
+ var nir = mosaicImage.select('B4');
+ var green = mosaicImage.select('B2');
+ var ndwi = green.subtract(nir).divide(green.add(nir)).rename('NDWI');
+
+// Create a binary image where water = 1, everything else = 0
+var binaryImage = ndwi.gt(0.28);
+// Use the binary image as a mask to retain only the water
+var waterOnly = binaryImage.updateMask(binaryImage);
+// Make an image collection of true color and water only images.
+var lakeCollection = ee.ImageCollection([
+ mosaicImage.visualize(lake_visParams),
+ waterOnly.visualize(waterOnlyVis)
+ ]);
+
+// Calculate water area in the Salt Lake AOI
+ var areaImage = binaryImage.multiply(ee.Image.pixelArea());
+ var area = areaImage.reduceRegion({
+ reducer: ee.Reducer.sum(),
+ geometry: saltLakeAOI,
+ scale: 100,
+ });
+ //Extract water area and convert to km2
+ var waterAreaSqKm =
+ ee.Number(area.get('NDWI')).divide(1e6).round()
+var featureToReturn = ee.Feature(null, {
+'year': year,
+'Lake Area': waterAreaSqKm,
+});
+return featureToReturn;
+};
+
+// Map the yearlyAvePcpt function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var lakeAreaRecord =
+ ee.FeatureCollection(years.map(lakeArea));
+print(lakeAreaRecord)
+
+// export
+Export.table.toDrive({
+ collection: lakeAreaRecord,
+ folder: 'earthengine_exercise7',
+ fileNamePrefix: 'saltlakeArea',
+ fileFormat: 'CSV'});

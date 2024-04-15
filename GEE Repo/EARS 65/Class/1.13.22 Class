@@ -1,0 +1,19 @@
+var myList = ee.List(['a', 'b', 'c'])
+
+//print out entire list
+print(myList);
+
+//print second item
+print(myList.get(1));
+
+
+//define a time
+var myDate = ee.Date('2015-12-31');
+
+//define time using YMD() method
+myDate = ee.Date.fromYMD(2015, 12, 31);
+
+
+//print time
+print(myDate);
+

@@ -1,0 +1,32 @@
+var startTime = ee.Date(Date.now());
+
+//prompt user's first number of age
+var userFirstNumber = ee.Number.parse(prompt('What is the first number of your age?'));
+
+//multiply first number by 5
+userFirstNumber = userFirstNumber.multiply(5);
+
+//add 3 to age
+userFirstNumber = userFirstNumber.add(3);
+
+//multiply by 2
+userFirstNumber = userFirstNumber.multiply(2);
+
+//prompt user's second number of age
+var userSecondNumber = ee.Number.parse(prompt('What is the second number of your age?'));
+
+//add the second number of user's age
+userFirstNumber = userFirstNumber.add(userSecondNumber);
+
+//subtract 6
+userFirstNumber = userFirstNumber.subtract(6);
+
+//The result is your age
+print('Your Age Is: ', userFirstNumber.getInfo());
+
+var endTime = ee.Date(Date.now());
+
+var totalTime = endTime.difference(startTime, 'seconds');
+
+print('This took: ', totalTime);
+

@@ -1,0 +1,127 @@
+ //Bring in Temperature Dataset (1979 - present/ 2m temp min, mean, max )
+var ERA5Data = ee.ImageCollection("ECMWF/ERA5/DAILY")
+//Bring in Precip Data (1981 - Present, mm/day)
+var chirpsData = ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY")
+//Bring in Prism Data
+var prismData = ee.ImageCollection("OREGONSTATE/PRISM/AN81d")
+
+
+
+
+//calculate avg temp for any day from 1981 to 2020
+
+//should this be a fucntion? then run it off a list from Jan 1 to Dec 31 for an inputed year?
+
+//establish dates for average temp
+var avgStartDate = ee.Date.fromYMD(1981, 1, 1);
+var avgEndDate = ee.Date.fromYMD(2020, 12, 31);
+//select ave temp band
+var surfacetemp = ERA5Data.select('mean_2m_air_temperature');
+//filter data to those date
+var filteredDates = surfacetemp.filter(ee.Filter.date(avgStartDate, avgEndDate));
+
+
+
+
+/*
+//this function runs for every year, (1981-2020))
+//function that gives me top 10 days with anomaly
+ 
+        (this function below has to be run for every date from Jan 1 to Dec 31 for given year)
+        (Not sure how to make a function run for multiple variables (month(1-12), and date(1-31))
+        //function that would determine anomaly for one day
+        var tempOfDay = ERA5Data filtered to that specific day
+ 
+               (this function would run for every time day? Or should I make this function separate and have this return the avg temp for every day of the year                    based on year range?)
+               //function to determine the average temperature for that given day in every year
+               Years = list.sequence(1981 – 2020)
+               Run a function that would select a date,
+               Grab temp from that date from every year
+               Calc average of those temp to give avg temp for that date
+               Return the avg temp for that date
+        
+        Var tempAnomaly = Temp of that day – avg temp for that day
+        Return a collection that has the Month, Day, and temp anomaly
+ 
+Sort all returned days in ascending order by temp anomalies
+Limit to top 10 
+Return highest ten with Year, Month, Day, Temp Anomaly
+
+
+
+*/
+
+
+/*
+//creating a function
+/function based on a year to get 10 highest avg temp days
+
+/function 1 to determine anomoly for one day
+start date = (year, month, day)
+end date is .advance ( day, 1)
+select temp.
+/function 2 to determine average temp {
+get temp from that day on every year from 1981 - 2020
+add all together, divide by amount of years
+return the average temp for that day based on years
+}2
+select temp on that day for year.
+subtract average from that.
+return temp anomaly
+}1
+run function 1 for list of every day of the year
+sort ^ by anomaly ascending
+limit to top 10
+return 10 highest anomaly days
+}
+*/
+
+//Function based on year to get 10 Highest Ave Temp Days
+var topTempDays = function(year) {
+  
+  
+  //function to determine anomoly for one day
+  var singleDayAnomoly = function(year) {
+    var startDate = ee.Date.fromYMD(year, month, day);
+    var endDate = startDate.advance('day', 1);
+    var surfacetemp = ERA5Data.select('mean_2m_air_temperature');
+    
+    
+    //function to determine average temp of that day based on all years in dataset
+    var avgTempTimespand = function(month, day) {
+      var years = [1981 - 2020];
+      var filtereddates = 
+      
+    var featureCollectiontoReturn = ee.Feature(null, {
+    'year' : year,
+    'Temperature Anomoly' : tempanomaly
+    })
+    return(featuretoReturn)
+    }
+
+
+
+
+  }
+  
+var anomalyDays = anomalyDays.sort({property: 'tempanomaly',
+                                            ascending: true});
+
+
+}
+
+
+
+
+
+
+/*
+//CREATE TEMP ANOMOLIES
+//create function to find temp anomoly of any given day in one year based on average of years within data set
+var findTempAnomoly = function(year) {
+  //make dates from beggining of year to end of year
+  var startDate = ee.Date.fromYMD(year, 1, 1);
+  var endDate = ee.Date.fromYMD(year, 12, 31);
+}
+
+*/

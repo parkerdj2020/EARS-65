@@ -1,0 +1,186 @@
+//Load the ERA5-Land Monthly Averaged dataset
+var eraDataset = ee.ImageCollection("ECMWF/ERA5/DAILY");
+ 
+//Select the surface air temp band
+var surfaceTemp = eraDataset.select('mean_2m_air_temperature');
+ 
+// Load country features from Large Scale International Boundary (LSIB) dataset.
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States")
+ 
+// ee.Filter.metadata() depracated, suggest use ee.Filter.eq() instead
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+ 
+// Center map on selected state
+Map.centerObject(selectedState, 5);
+ //Load the ERA5-Land Monthly Averaged dataset
+var eraDataset = ee.ImageCollection("ECMWF/ERA5/DAILY");
+ 
+//Select the surface air temp band
+var surfaceTemp = eraDataset.select('mean_2m_air_temperature');
+ 
+// Load country features from Large Scale International Boundary (LSIB) dataset.
+var stateBoundaries = ee.FeatureCollection("TIGER/2018/States")
+ 
+// ee.Filter.metadata() depracated, suggest use ee.Filter.eq() instead
+var selectedState = stateBoundaries.filter(ee.Filter.eq('STUSPS', 'NH'));
+ 
+// Center map on selected state
+Map.centerObject(selectedState, 5);
+ 
+// Define visParams dictionary and display for selected state
+var shown = true; // true or false
+var opacity = 0.5; // number [0-1]
+var stateVis = {color: 'red'}; 
+ 
+// Add the selected state to the map display
+Map.addLayer(selectedState, stateVis, 'NH', shown, opacity);
+ 
+ 
+ 
+ 
+ 
+ /*
+//------------------------------------------------------------
+// Function to calculate ave temp in NH for a given day
+ 
+var getAveNHTemp = function(image) {
+  
+  // Get image date
+  var imageDate = ee.Date(image.get('system:time_start'));
+ 
+  //Define reduce region parameters
+  var reduceRegionParams = {
+    reducer: ee.Reducer.mean(),
+    geometry: selectedState.geometry(),
+    scale: 100,
+  }
+ 
+  // reduce region to get mean
+                var stateAveTemp  =   
+     image.reduceRegion(reduceRegionParams);
+     
+     
+  // Extract ave  temp
+  var aveTemp = stateAveTemp.get('mean_2m_air_temperature');
+  
+ 
+// Create feature to return
+  var featureToReturn = ee.Feature(null, {
+    'year' : imageDate.get('year'),
+    'dayOfYear' : imageDate.getRelative('day', 'year'),
+    'aveTemp': aveTemp,
+    });
+  return featureToReturn;
+  
+}
+ 
+var year = 2019
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(12, 'month')
+var filteredTemp = 
+     surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+     
+     
+// Map the getAveNHTemp function to each element in the 
+// filteredTemp image collection and
+// organize the returned ee.Features (from the function) 
+// into a Feature Collection 
+var stateTempRecord = 
+  ee.FeatureCollection(filteredTemp.map(getAveNHTemp));
+     
+ 
+print(stateTempRecord);
+ 
+ */
+ //****************************************************************************************************
+ 
+  
+var years = ee.List.sequence(1981, 2020);
+
+
+
+//------------------------------------------------------------
+
+ 
+var dataForYear = function(year) {
+var startDate = ee.Date.fromYMD(year, 1, 1)
+var endDate = startDate.advance(12, 'month')
+var filteredTemp = 
+     surfaceTemp.filter(ee.Filter.date(startDate, endDate));
+     
+     
+
+// Function to calculate ave temp in NH for a given day
+ 
+var getAveNHTemp = function(image) {
+  
+  // Get image date
+  var imageDate = ee.Date(image.get('system:time_start'));
+ 
+  //Define reduce region parameters
+  var reduceRegionParams = {
+    reducer: ee.Reducer.mean(),
+    geometry: selectedState.geometry(),
+    scale: 100,
+  }
+ 
+  // reduce region to get mean
+                var stateAveTemp  =   
+     image.reduceRegion(reduceRegionParams);
+     
+     
+  // Extract ave  temp
+  var aveTemp = stateAveTemp.get('mean_2m_air_temperature');
+  
+ 
+// Create feature to return
+  var featureToReturn = ee.Feature(null, {
+    'year' : imageDate.get('year'),
+    'dayOfYear' : imageDate.getRelative('day', 'year'),
+    'aveTemp': aveTemp,
+    });
+  return featureToReturn;
+}
+
+
+// Map the getAveNHTemp function to each element in the 
+// filteredTemp image collection and
+// organize the returned ee.Features (from the function) 
+// into a Feature Collection 
+var stateTempRecord = 
+  ee.FeatureCollection(filteredTemp.map(getAveNHTemp));
+     
+ return stateTempRecord
+}
+
+
+var mapForAll = function(year) {
+var collection = dataForYear(year)
+var toReturn = collection
+return toReturn;
+}
+
+
+var allYears = ee.FeatureCollection(years.map(dataForYear))
+print(allYears)
+
+
+/*
+var yearTempCollection = ee.FeatureCollection(.map(wholeYear));
+
+
+print(yearTempCollection);
+ 
+*/
+ 
+ /*
+// Export temp record
+Export.table.toDrive({
+  collection: stateTempRecord,
+  folder: 'earthengine/exercise4',
+  fileNamePrefix: 'dailyNHTemp2019',
+  fileFormat: 'CSV'});
+  */
+  
+
+ 

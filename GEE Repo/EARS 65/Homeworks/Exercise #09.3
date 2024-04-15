@@ -1,0 +1,64 @@
+//bring in data
+var HansenData = ee.Image("UMD/hansen/global_forest_change_2020_v1_8")
+//bring point to main script
+var santaRosa = /* color: #0b4a8b */ee.Geometry.Point([-69.96 , -12.94]);
+
+//center and add planet
+Map.centerObject(santaRosa, 10);
+Map.addLayer(HansenData, {}, 'Hansen', true, .4);
+
+//create geometry for mining AOI
+var miningAOI = 
+    /* color: #ffc82d */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.Polygon(
+        [[[-70.67617126464845, -12.637335764964023],
+          [-70.67617126464845, -13.121957909849472],
+          [-69.8384637451172, -13.121957909849472],
+          [-69.8384637451172, -12.637335764964023]]], null, false);
+
+
+
+
+//filter to last year summer
+var years = ee.List.sequence(16, 20);
+
+
+function forestLoss(year) {
+var lossInYear = HansenData.select(['lossyear']).eq(ee.Number(year));  
+
+// Multiply loss pixels by their area 
+var areaImage = lossInYear.multiply(ee.Image.pixelArea()); 
+var area = areaImage.reduceRegion({
+ reducer: ee.Reducer.sum(),
+ geometry: miningAOI,
+ scale: 10,
+  maxPixels: 1.0e9
+ });
+ 
+ var featureToReturn = ee.Feature(null, {
+'Year': year,
+'Area Loss': area,
+});
+return featureToReturn;
+}
+
+
+var forestAreaRecord =
+ ee.FeatureCollection(years.map(forestLoss));
+print(forestAreaRecord)
+
+
+
+// export
+Export.table.toDrive({
+ collection: forestAreaRecord,
+ folder: 'earthengine_exercise9',
+ fileNamePrefix: 'forestArea1',
+ fileFormat: 'CSV'});
+ 
+ 

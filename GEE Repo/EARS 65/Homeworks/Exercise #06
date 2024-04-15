@@ -1,0 +1,57 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var greenAOI = /* color: #d63000 */ee.Geometry.Polygon(
+        [[[-110.00261128920073, 38.53541244386124],
+          [-110.00213922041411, 38.53569778302707],
+          [-110.00338376539702, 38.53690626577023],
+          [-110.00396312254423, 38.5368223440135]]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+//bring in data set
+var s2Dataset = ee.ImageCollection("COPERNICUS/S2");
+
+//filter to AOI
+var s2_AOI = s2Dataset.filterBounds(greenAOI);
+
+//filter to cloud free
+var s2_AOI_cf = s2_AOI.filterMetadata('cf', 'less_than', 5);
+
+//sort by cloud cover
+var s2_AOI_sorted = s2_AOI_cf.sort('cf');
+
+//-------------------------------------------------------------------------
+//Function to filter the sorted image collection to the top 10 in a given month
+//-------------------------------------------------------------------------
+var getMonthImage = function(monthNumber) {
+  // Filter to get images in given month
+  var monthImages = s2_AOI_sorted.filter(ee.Filter.calendarRange({
+    start: monthNumber,
+    field: 'month'}));
+
+// Grab only top 10 images
+  var topImages = monthImages.limit(10);
+  
+// Average top images
+  var aveImage = topImages.mean();
+  
+ // Create feature to return
+ var featureToReturn = ee.Feature(null, {
+ 'month': monthNumber,
+ 'image': topImages.mean()
+});
+ return featureToReturn};
+//-------------------------------------------------------------------------
+
+
+var janFeature = getMonthImage(1);
+var janImage = ee.Image(janFeature.get('image'));
+
+var sentinelVis = {
+ min: 0,
+ max: 10000,
+ bands: ['B4', 'B3', 'B2']
+};
+
+Map.centerObject(greenAOI);
+// Add images to map
+Map.addLayer(janImage, sentinelVis, 'Average');
+
+

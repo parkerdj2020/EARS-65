@@ -1,0 +1,41 @@
+// Create a variable with the name of the user
+var userName = ee.String(prompt('What is your name?'));
+//Print the personalized greeting
+print('Hello, ' +userName.getInfo());
+//Create a variable with the user's favorite number
+var userFavoriteNumber = ee.Number.parse(prompt('What is your favorite number?'));
+//Print the User's favorite number
+print('Your favorite number is ' + userFavoriteNumber.getInfo());
+//Create a variable with list of strings
+var fairchildAddress = [19, 'Fayerweather', 'Hill']
+//Tell user where they are
+print('You are at ' + fairchildAddress);
+//Define a string that exists on the google's computers
+var googleString = ee.String('This is on Googles Computer');
+print ('String at Google: '+ googleString.getInfo());
+//Define a number that exists on Google's computers
+var googleNumber = ee.Number(100);
+//Add 12 to googleNumber
+print('Number at Google: ', googleNumber.log10().getInfo());
+
+//Define a List
+var listByThrees = ee.List([3, 6, 9, 12, 155]);
+print('My List: ', listByThrees.getInfo());
+print('Third item in the list: ', listByThrees.get(2));
+// A Visual parameters dictionary
+var visualParameters = ee.Dictionary({
+  min: 100,
+  max: 400,
+});
+//use the get() method to access specific items
+var maxValue = visualParameters.get('max');
+//For more complicated containers print the entire container
+print('Print max value: '+ maxValue.getInfo());
+
+//Define a date in Earth Engine
+var date = ee.Date('2015-12-31');
+print('Date: ', date);
+
+//Set a variable to current time.
+var currentTime = ee.Date(Date.now());
+print('Current Time: ', currentTime);

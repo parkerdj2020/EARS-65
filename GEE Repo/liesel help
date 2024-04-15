@@ -1,0 +1,77 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var airbus = /* color: #d63000 */ee.Geometry({
+      "type": "GeometryCollection",
+      "geometries": [
+        {
+          "type": "Point",
+          "coordinates": [
+            -83.48927459052335,
+            9.483121463429649
+          ]
+        },
+        {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                -83.49579772284757,
+                9.511903886729408
+              ],
+              [
+                -83.52910002997648,
+                9.47499422397224
+              ],
+              [
+                -83.51090392401944,
+                9.427242811715947
+              ],
+              [
+                -83.44429930976163,
+                9.414372504901769
+              ],
+              [
+                -83.38044127753507,
+                9.477703325177465
+              ],
+              [
+                -83.41649016669523,
+                9.508179238850236
+              ]
+            ]
+          ],
+          "geodesic": true,
+          "evenOdd": true
+        }
+      ],
+      "coordinates": []
+    });
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+
+//bring in DataSet
+var ls8Dataset = ee.ImageCollection("LANDSAT/LC08/C02/T1_RT")
+
+//filter to last year summer
+var year = 2020
+var startDate = ee.Date.fromYMD(year, 1, 1);
+var endDate = ee.Date.fromYMD(year, 12, 31);
+var ls8_lastYear = ls8Dataset.filterDate(startDate, endDate)
+//filter to AOI
+var ls8_lastYear_AOI = ls8_lastYear.filterBounds(airbus);
+//sort by ascending cloud coverage
+var mosaicImage = ls8_lastYear_AOI.sort({ property: 'CLOUD_COVER',
+                                                      ascending: false})
+                                            .mosaic();
+                                            
+
+//create visParams for lake image
+var lake_visParams = {
+  min: 0,
+  max:.3,
+  bands: ['B4', 'B3', 'B2'],
+}
+
+
+//Center over Lake
+Map.centerObject(airbus, 8)
+//add true layer
+Map.addLayer(mosaicImage, lake_visParams, 'LakeImage', true, 1);

@@ -1,0 +1,95 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var greenAOI = /* color: #d63000 */ee.Geometry.Polygon(
+        [[[-110.00168333382531, 38.53434916816516],
+          [-110.00095377297326, 38.534768790395844],
+          [-110.0030137094967, 38.53644725484262],
+          [-110.00337848992272, 38.5362122721776]]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var s2Dataset = ee.ImageCollection("COPERNICUS/S2_SR")
+
+// Filter for those images containing the Long Island Sound AOI
+var s2_AOI = s2Dataset.filter(ee.Filter.bounds(greenAOI));
+
+//Filter for those images with < 5% cloud cover
+var s2_AOI_cf = s2_AOI.filter(ee.Filter.lt('CLOUD_COVERAGE_ASSESSMENT', 05));
+
+// sort by cloud coverage (least to most)
+// note: it is best to sort after filtering. Sorting is inefficient 
+var s2_AOI_sorted = s2_AOI_cf.sort('COULD_COVERAGE_ASSESSMENT', true); // default is ascending
+// boolean true in above statement is not required. Just an example for me to know
+
+//-------------------------------------------------------------------------
+//Function to filter the sorted image collection to the top 10 (lowest cloud coverage) 
+// in a given month
+//-------------------------------------------------------------------------
+var getMonthImage = function(monthNumber) {
+  
+  // Filter to get images in given month
+  var monthImages = s2_AOI_sorted.filter(ee.Filter.calendarRange({
+    start: monthNumber,
+    field: 'month'}));
+
+  // Sort the images by cloud cover
+  var monthImages_sorted = monthImages.sort('CLOUD_COVERAGE_ASSESSMENT'); 
+  //default is ascending
+  
+  // Grab only top 10 images
+  var topImages = monthImages_sorted.limit(10);
+  
+  // Average top images
+ var aveImage = topImages.mean();
+
+ // Calculate band means in greenAOI
+ var greenBandMeans = aveImage.reduceRegion({
+ reducer: ee.Reducer.mean(),
+ geometry: greenAOI,
+ scale: 10
+ });
+  // Create feature to return
+ var featureToReturn = ee.Feature(null, {
+ 'month': monthNumber,
+    'aveImage' : aveImage,
+    // Green River color
+    'blue' :  ee.Number(greenBandMeans.get('B2')),
+    'green' : ee.Number(greenBandMeans.get('B3')),
+    'red' :   ee.Number(greenBandMeans.get('B4')),
+});
+return featureToReturn;
+}
+// Create list of months
+var months = ee.List.sequence(1, 12);
+
+// Map the getMonthImage function to each element in the list and
+// organize the returned ee.Features (from the function)
+// into a Feature Collection
+var monthFeatureCollection =
+ ee.FeatureCollection(months.map(getMonthImage));
+
+print(monthFeatureCollection)
+
+// export
+Export.table.toDrive({
+ collection: monthFeatureCollection,
+ folder: 'earthengine_exercise6',
+ fileNamePrefix: 'greenMonthRecord',
+ fileFormat: 'CSV'});
+
+// example code for returning the January image from the above function
+var janFeature = getMonthImage(1);
+var janImage = ee.Image(janFeature.get('aveImage'));
+print(janImage)
+
+// display janImage
+// define janVis vis params dictionary
+var sentinelVis = {
+  min: 0,
+  max: 2000,
+  bands: ['B4', 'B3', 'B2'] // red, green, blue
+};
+
+// center on Green River
+Map.centerObject(greenAOI, 14); // Center on the AOI
+
+// add layer
+Map.addLayer(janImage, sentinelVis, 'January');
+
